@@ -1,0 +1,266 @@
+/* 主容器 */
+.ai-cg-settings-container {
+    max-width: 900px;
+    margin-top: 20px;
+}
+
+/* 设置区块 */
+.ai-cg-setting-section {
+    background: white;
+    padding: 20px;
+    margin-bottom: 30px;
+    border: 1px solid #ccd0d4;
+    box-shadow: 0 1px 1px rgba(0,0,0,0.04);
+}
+
+.ai-cg-setting-section h2,
+.ai-cg-setting-section h3 {
+    margin-top: 0;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #eee;
+}
+
+/* 工具栏 */
+.ai-cg-toolbar {
+    background: white;
+    padding: 15px 20px;
+    margin-bottom: 20px;
+    border: 1px solid #ccd0d4;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+
+.ai-cg-filters select {
+    padding: 6px 12px;
+    font-size: 14px;
+}
+
+.ai-cg-bulk-actions {
+    display: flex;
+    gap: 10px;
+}
+
+/* 徽章 */
+.ai-cg-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 3px;
+    font-size: 12px;
+    font-weight: normal;
+}
+
+.ai-cg-badge-success {
+    background: #e6f5e6;
+    color: #2d7f2d;
+}
+
+.ai-cg-badge-warning {
+    background: #fff4e6;
+    color: #b56a00;
+}
+
+.ai-cg-badge-info {
+    background: #e6f3f8;
+    color: #0073aa;
+}
+
+/* 状态指示 */
+.status-publish {
+    color: #2d7f2d;
+}
+
+.status-draft {
+    color: #b56a00;
+}
+
+/* 加载动画 */
+#ai-cg-loading {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 999999;
+}
+
+.ai-cg-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.5);
+}
+
+.ai-cg-spinner {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    text-align: center;
+}
+
+.ai-cg-bounce1,
+.ai-cg-bounce2,
+.ai-cg-bounce3 {
+    display: inline-block;
+    width: 18px;
+    height: 18px;
+    background-color: #fff;
+    border-radius: 50%;
+    animation: ai-cg-bounce 1.4s infinite ease-in-out both;
+}
+
+.ai-cg-bounce1 {
+    animation-delay: -0.32s;
+}
+
+.ai-cg-bounce2 {
+    animation-delay: -0.16s;
+}
+
+@keyframes ai-cg-bounce {
+    0%, 80%, 100% {
+        transform: scale(0);
+    }
+    40% {
+        transform: scale(1);
+    }
+}
+
+/* 信息框 */
+.ai-cg-info-box {
+    background: #fff9e6;
+    border-left: 4px solid #ffb900;
+    padding: 15px 20px;
+    margin-top: 30px;
+}
+
+.ai-cg-info-box h3 {
+    margin-top: 0;
+    color: #ffb900;
+}
+
+.ai-cg-info-box ol {
+    margin-bottom: 0;
+    padding-left: 20px;
+}
+
+.ai-cg-info-box ol li {
+    margin-bottom: 8px;
+}
+
+/* 测试区域 */
+.ai-cg-test-section {
+    margin-top: 30px;
+}
+
+/* 表格优化 */
+.ai-cg-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.ai-cg-table th,
+.ai-cg-table td {
+    padding: 10px;
+    text-align: left;
+    border-bottom: 1px solid #eee;
+}
+
+.ai-cg-table th {
+    background: #f9f9f9;
+    font-weight: 600;
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+    .ai-cg-toolbar {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .ai-cg-bulk-actions {
+        width: 100%;
+        flex-direction: column;
+    }
+
+    .ai-cg-bulk-actions button {
+        width: 100%;
+    }
+}
+
+/* 成功消息 */
+.ai-cg-success-message {
+    background: #e6f5e6;
+    border: 1px solid #2d7f2d;
+    color: #2d7f2d;
+    padding: 12px 16px;
+    border-radius: 4px;
+    margin-bottom: 20px;
+}
+
+/* 错误消息 */
+.ai-cg-error-message {
+    background: #ffe6e6;
+    border: 1px solid #d12e2e;
+    color: #d12e2e;
+    padding: 12px 16px;
+    border-radius: 4px;
+    margin-bottom: 20px;
+}
+
+/* 进度条 */
+.ai-cg-progress {
+    width: 100%;
+    height: 8px;
+    background: #f0f0f0;
+    border-radius: 4px;
+    overflow: hidden;
+    margin: 10px 0;
+}
+
+.ai-cg-progress-bar {
+    height: 100%;
+    background: #2271b1;
+    transition: width 0.3s ease;
+}
+
+/* 日志区域样式 */
+.ai-cg-logs-section {
+    background: white;
+    padding: 20px;
+    margin-bottom: 30px;
+    border: 1px solid #ccd0d4;
+    box-shadow: 0 1px 1px rgba(0,0,0,0.04);
+}
+
+.ai-cg-logs-section h2 {
+    margin-top: 0;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #eee;
+}
+
+.ai-cg-logs-section .description {
+    margin-bottom: 15px;
+    color: #666;
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+.ai-cg-logs-section button {
+    display: inline-flex;
+    align-items: center;
+    padding: 8px 16px;
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.ai-cg-logs-section button .dashicons {
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+}
