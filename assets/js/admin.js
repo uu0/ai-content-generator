@@ -11,6 +11,7 @@
         initLogActions();
         initRefreshModels();
         initAutoFilter();
+        initModals();
     });
 
     // 自动筛选功能
@@ -79,6 +80,12 @@
         $(document).on('click', '.ai-cg-unexclude', function(e) {
             e.preventDefault();
             unexcludePost($(this));
+        });
+
+        // 撤回操作
+        $(document).on('click', '.ai-cg-undo', function(e) {
+            e.preventDefault();
+            undoOperation($(this));
         });
     }
 
@@ -180,7 +187,28 @@
             success: function(response) {
                 hideLoading();
                 if (response.success) {
-                    alert('图片描述生成成功！\n\n处理了 ' + response.data.total + ' 张图片，重命名 ' + response.data.renamed + ' 张。');
+                    // 如果有部分失败，显示详情
+                    if (response.data.renamed < response.data.total && response.data.results) {
+                        var errorCount = response.data.total - response.data.renamed;
+                        var errorMsg = '图片描述生成完成！\n\n处理了 ' + response.data.total + ' 张图片，成功重命名 ' + response.data.renamed + ' 张，失败 ' + errorCount + ' 张。\n\n失败原因：\n';
+
+                        // 显示前3个失败项
+                        var errorItems = response.data.results.filter(function(item) {
+                            return item.status === 'error';
+                        }).slice(0, 3);
+
+                        errorItems.forEach(function(item) {
+                            errorMsg += '- 附件ID ' + item.attachment_id + ': ' + item.message + '\n';
+                        });
+
+                        if (errorCount > 3) {
+                            errorMsg += '... 还有 ' + (errorCount - 3) + ' 个失败项';
+                        }
+
+                        alert(errorMsg);
+                    } else {
+                        alert('图片描述生成成功！\n\n处理了 ' + response.data.total + ' 张图片，重命名 ' + response.data.renamed + ' 张。');
+                    }
                     // 刷新页面
                     location.reload();
                 } else {
@@ -203,39 +231,9 @@
             return;
         }
 
-        // 让用户选择润色风格
-        var style = prompt('选择润色风格：\n\n1. normal - 标准润色\n2. formal - 正式风格\n3. casual - 轻松风格\n4. creative - 创意风格\n\n请输入数字或风格名称 (默认：normal)：', 'normal');
-
-        if (!style) {
-            return;
-        }
-
-        showLoading();
-
-        $.ajax({
-            url: ai_cg_data.ajax_url,
-            type: 'POST',
-            data: {
-                action: 'ai_cg_polish_content',
-                post_id: postId,
-                style: style,
-                nonce: ai_cg_data.nonce
-            },
-            success: function(response) {
-                hideLoading();
-                if (response.success) {
-                    alert('内容润色成功！');
-                    // 刷新页面
-                    location.reload();
-                } else {
-                    alert('润色失败：' + response.data);
-                }
-            },
-            error: function() {
-                hideLoading();
-                alert('网络错误，请稍后重试');
-            }
-        });
+        // 显示润色风格选择模态框
+        $('#ai-cg-polish-modal').data('post-id', postId).fadeIn();
+        $('#ai-cg-polish-style').val('normal');
     }
 
     // AI排版
@@ -247,39 +245,9 @@
             return;
         }
 
-        // 让用户选择排版类型
-        var formatType = prompt('选择排版类型：\n\n1. standard - 标准排版\n2. blog - 博客格式\n3. technical - 技术文档格式\n\n请输入数字或类型名称 (默认：standard)：', 'standard');
-
-        if (!formatType) {
-            return;
-        }
-
-        showLoading();
-
-        $.ajax({
-            url: ai_cg_data.ajax_url,
-            type: 'POST',
-            data: {
-                action: 'ai_cg_reformat_content',
-                post_id: postId,
-                format_type: formatType,
-                nonce: ai_cg_data.nonce
-            },
-            success: function(response) {
-                hideLoading();
-                if (response.success) {
-                    alert('内容排版成功！');
-                    // 刷新页面
-                    location.reload();
-                } else {
-                    alert('排版失败：' + response.data);
-                }
-            },
-            error: function() {
-                hideLoading();
-                alert('网络错误，请稍后重试');
-            }
-        });
+        // 显示排版类型选择模态框
+        $('#ai-cg-reformat-modal').data('post-id', postId).fadeIn();
+        $('#ai-cg-reformat-type').val('standard');
     }
 
     // 初始化批量操作
@@ -349,17 +317,9 @@
                 return;
             }
 
-            var style = prompt('批量润色风格：\n\n1. normal - 标准润色\n2. formal - 正式风格\n3. casual - 轻松风格\n4. creative - 创意风格\n\n请输入数字或风格名称 (默认：normal)：', 'normal');
-
-            if (!style) {
-                return;
-            }
-
-            if (!confirm('确定要为选中的 ' + postIds.split(',').length + ' 篇文章进行润色吗？')) {
-                return;
-            }
-
-            generateBulkPolish(postIds, style);
+            // 显示润色风格选择模态框
+            $('#ai-cg-polish-modal').data('post-ids', postIds).fadeIn();
+            $('#ai-cg-polish-style').val('normal');
         });
 
         // 批量排版
@@ -370,17 +330,9 @@
                 return;
             }
 
-            var formatType = prompt('批量排版类型：\n\n1. standard - 标准排版\n2. blog - 博客格式\n3. technical - 技术文档格式\n\n请输入数字或类型名称 (默认：standard)：', 'standard');
-
-            if (!formatType) {
-                return;
-            }
-
-            if (!confirm('确定要为选中的 ' + postIds.split(',').length + ' 篇文章进行排版吗？')) {
-                return;
-            }
-
-            generateBulkReformat(postIds, formatType);
+            // 显示排版类型选择模态框
+            $('#ai-cg-reformat-modal').data('post-ids', postIds).fadeIn();
+            $('#ai-cg-reformat-type').val('standard');
         });
 
         // 批量图片描述
@@ -894,6 +846,190 @@
         processNextDescription();
     }
 
+    // 模态框初始化
+    function initModals() {
+        // 排版模态框确定按钮
+        $('#ai-cg-reformat-confirm').on('click', function() {
+            var modal = $('#ai-cg-reformat-modal');
+            var formatType = $('#ai-cg-reformat-type').val();
+            var postId = modal.data('post-id');
+            var postIds = modal.data('post-ids');
+
+            modal.fadeOut();
+
+            // 单篇文章排版
+            if (postId) {
+                // 先预览内容
+                showLoading();
+
+                $.ajax({
+                    url: ai_cg_data.ajax_url,
+                    type: 'POST',
+                    data: {
+                        action: 'ai_cg_preview_operation',
+                        post_id: postId,
+                        operation_type: 'reformat',
+                        format_type: formatType,
+                        nonce: ai_cg_data.nonce
+                    },
+                    success: function(response) {
+                        hideLoading();
+                        if (response.success) {
+                            // 显示预览对话框
+                            $('#ai-cg-preview-description').text('以下是排版后的内容预览（只调整格式，不修改文字内容）：');
+                            $('#ai-cg-preview-content').html(response.data.new_content);
+                            $('#ai-cg-preview-modal')
+                                .data('post-id', postId)
+                                .data('operation-type', 'reformat')
+                                .data('format-type', formatType)
+                                .fadeIn();
+                        } else {
+                            alert('预览失败：' + response.data);
+                        }
+                    },
+                    error: function() {
+                        hideLoading();
+                        alert('网络错误，请稍后重试');
+                    }
+                });
+            }
+            // 批量排版
+            else if (postIds) {
+                if (!confirm('确定要为选中的 ' + postIds.split(',').length + ' 篇文章进行排版吗？\n\n注意：排版将只调整HTML标签格式，不修改任何文字内容。')) {
+                    return;
+                }
+
+                generateBulkReformat(postIds, formatType);
+            }
+        });
+
+        // 排版模态框取消按钮
+        $('#ai-cg-reformat-cancel').on('click', function() {
+            $('#ai-cg-reformat-modal').fadeOut();
+        });
+
+        // 润色模态框确定按钮
+        $('#ai-cg-polish-confirm').on('click', function() {
+            var modal = $('#ai-cg-polish-modal');
+            var style = $('#ai-cg-polish-style').val();
+            var postId = modal.data('post-id');
+            var postIds = modal.data('post-ids');
+
+            modal.fadeOut();
+
+            // 单篇文章润色
+            if (postId) {
+                // 先预览内容
+                showLoading();
+
+                $.ajax({
+                    url: ai_cg_data.ajax_url,
+                    type: 'POST',
+                    data: {
+                        action: 'ai_cg_preview_operation',
+                        post_id: postId,
+                        operation_type: 'polish',
+                        style: style,
+                        nonce: ai_cg_data.nonce
+                    },
+                    success: function(response) {
+                        hideLoading();
+                        if (response.success) {
+                            // 显示预览对话框
+                            $('#ai-cg-preview-description').text('以下是润色后的内容预览（保留原有HTML结构，仅改善文字表达）：');
+                            $('#ai-cg-preview-content').html(response.data.new_content);
+                            $('#ai-cg-preview-modal')
+                                .data('post-id', postId)
+                                .data('operation-type', 'polish')
+                                .data('style', style)
+                                .fadeIn();
+                        } else {
+                            alert('预览失败：' + response.data);
+                        }
+                    },
+                    error: function() {
+                        hideLoading();
+                        alert('网络错误，请稍后重试');
+                    }
+                });
+            }
+            // 批量润色
+            else if (postIds) {
+                if (!confirm('确定要为选中的 ' + postIds.split(',').length + ' 篇文章进行润色吗？\n\n注意：润色将修改文章文字内容，但保留原有的HTML结构。')) {
+                    return;
+                }
+
+                generateBulkPolish(postIds, style);
+            }
+        });
+
+        // 润色模态框取消按钮
+        $('#ai-cg-polish-cancel').on('click', function() {
+            $('#ai-cg-polish-modal').fadeOut();
+        });
+
+        // 预览模态框发布按钮
+        $('#ai-cg-preview-publish').on('click', function() {
+            var modal = $('#ai-cg-preview-modal');
+            var postId = modal.data('post-id');
+            var operationType = modal.data('operation-type');
+
+            modal.fadeOut();
+
+            // 确认发布
+            if (!confirm('确认要发布修改后的内容吗？\n\n原始内容将被保存以便撤回。')) {
+                return;
+            }
+
+            showLoading();
+
+            // 根据操作类型调用对应的发布接口
+            var action = operationType === 'polish' ? 'ai_cg_polish_content' : 'ai_cg_reformat_content';
+            var params = {
+                action: action,
+                post_id: postId,
+                nonce: ai_cg_data.nonce
+            };
+
+            if (operationType === 'polish') {
+                params.style = modal.data('style');
+            } else {
+                params.format_type = modal.data('format-type');
+            }
+
+            $.ajax({
+                url: ai_cg_data.ajax_url,
+                type: 'POST',
+                data: params,
+                success: function(response) {
+                    hideLoading();
+                    if (response.success) {
+                        alert((operationType === 'polish' ? '润色' : '排版') + '成功！内容已保存。');
+                        location.reload();
+                    } else {
+                        alert('发布失败：' + response.data);
+                    }
+                },
+                error: function() {
+                    hideLoading();
+                    alert('网络错误，请稍后重试');
+                }
+            });
+        });
+
+        // 预览模态框取消按钮
+        $('#ai-cg-preview-cancel').on('click', function() {
+            $('#ai-cg-preview-modal').fadeOut();
+        });
+
+        // 点击模态框外部关闭
+        $(window).on('click', function(e) {
+            if ($(e.target).is('#ai-cg-reformat-modal, #ai-cg-polish-modal, #ai-cg-preview-modal')) {
+                $(e.target).fadeOut();
+            }
+        });
+    }
+
     // 批量排除
     function bulkExcludePosts(postIds) {
         showLoading();
@@ -1019,6 +1155,47 @@
                     location.reload();
                 } else {
                     alert('取消排除失败：' + response.data);
+                }
+            },
+            error: function() {
+                hideLoading();
+                alert('网络错误，请稍后重试');
+            }
+        });
+    }
+
+    // 撤回操作
+    function undoOperation(button) {
+        var postId = button.data('post-id');
+        var operationType = button.data('operation-type');
+
+        if (!postId) {
+            alert('无效的文章ID');
+            return;
+        }
+
+        var opText = operationType === 'polish' ? '润色' : '排版';
+        if (!confirm('确定要撤回' + opText + '操作吗？\n\n此操作将恢复到修改前的内容。')) {
+            return;
+        }
+
+        showLoading();
+
+        $.ajax({
+            url: ai_cg_data.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'ai_cg_undo_operation',
+                post_id: postId,
+                nonce: ai_cg_data.nonce
+            },
+            success: function(response) {
+                hideLoading();
+                if (response.success) {
+                    alert('已撤回' + opText + '操作！');
+                    location.reload();
+                } else {
+                    alert('撤回失败：' + response.data);
                 }
             },
             error: function() {

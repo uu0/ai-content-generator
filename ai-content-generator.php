@@ -3,7 +3,7 @@
  * Plugin Name: AI Content Generator
  * Plugin URI: https://github.com/uu0/ai-content-generator
  * Description: 使用硅基流动API自动生成文章摘要和特色图片，支持Token统计和批量管理
- * Version: 2.0.3
+ * Version: 2.0.4
  * Author: uu0
  * License: GPL v2 or later
  * Text Domain: ai-content-generator
@@ -15,7 +15,7 @@ if (!defined('ABSPATH')) {
 }
 
 // 定义插件常量
-define('AI_CONTENT_GENERATOR_VERSION', '2.0.3');
+define('AI_CONTENT_GENERATOR_VERSION', '2.0.4');
 define('AI_CONTENT_GENERATOR_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('AI_CONTENT_GENERATOR_PLUGIN_URL', plugin_dir_url(__FILE__));
 

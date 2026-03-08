@@ -11,7 +11,7 @@
                     批量生成摘要
                 </button>
                 <button type="button" class="button ai-cg-bulk-image" data-post-ids="">
-                    批量生成图片
+                    批量生图
                 </button>
                 <button type="button" class="button ai-cg-bulk-polish" data-post-ids="">
                     批量润色
@@ -69,6 +69,8 @@
                     $has_image = has_post_thumbnail();
                     $summary_generated = get_post_meta(get_the_ID(), '_ai_cg_summary_generated', true);
                     $image_generated = get_post_meta(get_the_ID(), '_ai_cg_image_generated', true);
+                    $api = AI_Content_Generator_API::get_instance();
+                    $is_excluded = $api->is_post_excluded(get_the_ID());
                     ?>
                     <tr data-post-id="<?php echo get_the_ID(); ?>">
                         <td>
@@ -96,6 +98,9 @@
                             <span class="status-<?php echo get_post_status(); ?>">
                                 <?php echo get_post_status_object(get_post_status())->label; ?>
                             </span>
+                            <?php if ($is_excluded) : ?>
+                                <span class="ai-cg-badge ai-cg-badge-danger" style="margin-left: 5px;">已排除</span>
+                            <?php endif; ?>
                         </td>
                         <td>
                             <?php if ($has_summary) : ?>
@@ -127,7 +132,7 @@
                                     摘要
                                 </button>
                                 <button type="button" class="button button-small ai-cg-generate-image" data-post-id="<?php echo get_the_ID(); ?>">
-                                    图片
+                                    生图
                                 </button>
                                 <button type="button" class="button button-small ai-cg-generate-image-description" data-post-id="<?php echo get_the_ID(); ?>" title="为图片生成描述并重命名">
                                     描述
@@ -138,8 +143,17 @@
                                 <button type="button" class="button button-small ai-cg-reformat" data-post-id="<?php echo get_the_ID(); ?>" title="AI排版优化">
                                     排版
                                 </button>
-                                <?php $api = AI_Content_Generator_API::get_instance(); ?>
-                                <?php if ($api->is_post_excluded(get_the_ID())) : ?>
+                                <?php
+                                $original_content = get_post_meta(get_the_ID(), '_ai_cg_original_content', true);
+                                $operation_type = get_post_meta(get_the_ID(), '_ai_cg_operation_type', true);
+                                if (!empty($original_content) && !empty($operation_type)) :
+                                    $op_label = $operation_type === 'polish' ? '润色' : '排版';
+                                ?>
+                                    <button type="button" class="button button-small ai-cg-undo" data-post-id="<?php echo get_the_ID(); ?>" data-operation-type="<?php echo esc_attr($operation_type); ?>" title="撤回<?php echo esc_html($op_label); ?>操作">
+                                        撤回
+                                    </button>
+                                <?php endif; ?>
+                                <?php if ($is_excluded) : ?>
                                     <button type="button" class="button button-small ai-cg-unexclude" data-post-id="<?php echo get_the_ID(); ?>" title="从排除列表中移除">
                                         取消排除
                                     </button>
@@ -189,5 +203,55 @@
         <div class="ai-cg-bounce1"></div>
         <div class="ai-cg-bounce2"></div>
         <div class="ai-cg-bounce3"></div>
+    </div>
+</div>
+
+<!-- 排版类型选择模态框 -->
+<div id="ai-cg-reformat-modal" style="display: none;">
+    <div class="ai-cg-modal-content">
+        <h2>选择排版类型</h2>
+        <p>请选择您需要的排版风格：</p>
+        <select id="ai-cg-reformat-type" class="ai-cg-modal-select">
+            <option value="standard">标准排版 - 适合一般文章</option>
+            <option value="blog">博客格式 - 适合个人博客</option>
+            <option value="technical">技术文档 - 适合技术内容</option>
+        </select>
+        <div class="ai-cg-modal-buttons">
+            <button type="button" class="button button-primary" id="ai-cg-reformat-confirm">确定</button>
+            <button type="button" class="button" id="ai-cg-reformat-cancel">取消</button>
+        </div>
+    </div>
+</div>
+
+<!-- 润色风格选择模态框 -->
+<div id="ai-cg-polish-modal" style="display: none;">
+    <div class="ai-cg-modal-content">
+        <h2>选择润色风格</h2>
+        <p>请选择您需要的润色风格：</p>
+        <select id="ai-cg-polish-style" class="ai-cg-modal-select">
+            <option value="normal">标准润色 - 改善流畅度和可读性</option>
+            <option value="formal">正式风格 - 专业书面语</option>
+            <option value="casual">轻松风格 - 友好的口语</option>
+            <option value="creative">创意风格 - 富有创新和吸引力</option>
+        </select>
+        <div class="ai-cg-modal-buttons">
+            <button type="button" class="button button-primary" id="ai-cg-polish-confirm">确定</button>
+            <button type="button" class="button" id="ai-cg-polish-cancel">取消</button>
+        </div>
+    </div>
+</div>
+
+<!-- 预览确认模态框 -->
+<div id="ai-cg-preview-modal" style="display: none;">
+    <div class="ai-cg-modal-content ai-cg-preview-content">
+        <h2>预览修改内容</h2>
+        <p id="ai-cg-preview-description">请预览修改后的内容：</p>
+        <div class="ai-cg-preview-box">
+            <div id="ai-cg-preview-content" style="max-height: 400px; overflow-y: auto; padding: 15px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 4px;"></div>
+        </div>
+        <div class="ai-cg-modal-buttons">
+            <button type="button" class="button button-secondary" id="ai-cg-preview-cancel">取消</button>
+            <button type="button" class="button button-primary" id="ai-cg-preview-publish">确认发布</button>
+        </div>
     </div>
 </div>
