@@ -35,6 +35,13 @@ class AI_Content_Generator_Admin {
         add_action('admin_enqueue_scripts', array($this, 'enqueue_scripts'));
         add_action('wp_ajax_ai_cg_export_logs', array($this, 'export_logs'));
         add_action('wp_ajax_ai_cg_refresh_models', array($this, 'refresh_models_ajax'));
+        add_action('wp_ajax_ai_cg_generate_summary', array($this, 'generate_summary_ajax'));
+        add_action('wp_ajax_ai_cg_generate_image', array($this, 'generate_image_ajax'));
+        add_action('wp_ajax_ai_cg_generate_image_description', array($this, 'generate_image_description_ajax'));
+        add_action('wp_ajax_ai_cg_polish_content', array($this, 'polish_content_ajax'));
+        add_action('wp_ajax_ai_cg_reformat_content', array($this, 'reformat_content_ajax'));
+        add_action('wp_ajax_ai_cg_batch_exclude', array($this, 'batch_exclude_ajax'));
+        add_action('wp_ajax_ai_cg_remove_from_excluded', array($this, 'remove_from_excluded_ajax'));
     }
 
     /**
@@ -79,7 +86,20 @@ class AI_Content_Generator_Admin {
         register_setting('ai_cg_settings', 'ai_cg_featured_image_enabled');
         register_setting('ai_cg_settings', 'ai_cg_summary_model');
         register_setting('ai_cg_settings', 'ai_cg_image_model');
+        register_setting('ai_cg_settings', 'ai_cg_image_description_model');
         register_setting('ai_cg_settings', 'ai_cg_auto_check_enabled');
+
+        // 新增：自定义提示词
+        register_setting('ai_cg_settings', 'ai_cg_summary_prompt');
+        register_setting('ai_cg_settings', 'ai_cg_image_prompt');
+        register_setting('ai_cg_settings', 'ai_cg_image_description_prompt');
+        register_setting('ai_cg_settings', 'ai_cg_polish_prompt_normal');
+        register_setting('ai_cg_settings', 'ai_cg_polish_prompt_formal');
+        register_setting('ai_cg_settings', 'ai_cg_polish_prompt_casual');
+        register_setting('ai_cg_settings', 'ai_cg_polish_prompt_creative');
+        register_setting('ai_cg_settings', 'ai_cg_reformat_prompt_standard');
+        register_setting('ai_cg_settings', 'ai_cg_reformat_prompt_blog');
+        register_setting('ai_cg_settings', 'ai_cg_reformat_prompt_technical');
     }
 
     /**
@@ -176,7 +196,26 @@ class AI_Content_Generator_Admin {
                         'compare' => '>'
                     )
                 );
+            } elseif ($_GET['filter'] === 'excluded') {
+                // 排除的文章
+                $excluded_posts = array_filter(array_map('trim', explode(',', get_option('ai_cg_excluded_posts', ''))));
+                $excluded_categories = array_filter(array_map('trim', explode(',', get_option('ai_cg_excluded_categories', ''))));
+
+                if (!empty($excluded_categories)) {
+                    $args['category__in'] = $excluded_categories;
+                }
+
+                if (!empty($excluded_posts)) {
+                    $args['post__in'] = $excluded_posts;
+                }
             }
+        }
+
+        // 应用排除规则（自动处理时）
+        $excluded_categories = get_option('ai_cg_excluded_categories', '');
+        $excluded_category_ids = array_filter(array_map('trim', explode(',', $excluded_categories)));
+        if (!empty($excluded_category_ids)) {
+            $args['category__not_in'] = $excluded_category_ids;
         }
 
         $query = new WP_Query($args);
@@ -367,5 +406,391 @@ class AI_Content_Generator_Admin {
                 wp_send_json_error(array('message' => '获取模型列表失败'));
             }
         }
+    }
+
+    /**
+     * AJAX: 生成摘要
+     */
+    public function generate_summary_ajax() {
+        check_ajax_referer('ai_cg_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('权限不足');
+            return;
+        }
+
+        $post_id = isset($_POST['post_id']) ? intval($_POST['post_id']) : 0;
+        if (!$post_id) {
+            wp_send_json_error('文章ID无效');
+            return;
+        }
+
+        $post = get_post($post_id);
+        if (!$post) {
+            wp_send_json_error('文章不存在');
+            return;
+        }
+
+        $api = AI_Content_Generator_API::get_instance();
+
+        // 检查是否被排除
+        if ($api->is_post_excluded($post_id)) {
+            wp_send_json_error('这篇文章已被排除');
+            return;
+        }
+
+        // 使用自定义提示词或默认提示词
+        $custom_prompt = get_option('ai_cg_summary_prompt', '');
+        if (!empty($custom_prompt)) {
+            // 如果有自定义提示词，需要使用特殊的方法
+            $prompt = $custom_prompt;
+            $content = $post->post_content;
+            if (!empty($post->post_title)) {
+                $prompt = str_replace('{title}', $post->post_title, $prompt);
+            }
+            $prompt = str_replace('{content}', wp_trim_words($content, 500), $prompt);
+            $response = $api->generate_summary($content, $post->post_title);
+        } else {
+            $response = $api->generate_summary($post->post_content, $post->post_title);
+        }
+
+        if (is_wp_error($response)) {
+            wp_send_json_error($response->get_error_message());
+            return;
+        }
+
+        $summary = $response['choices'][0]['message']['content'];
+
+        // 更新文章摘要
+        wp_update_post(array(
+            'ID' => $post_id,
+            'post_excerpt' => $summary
+        ));
+
+        // 记录生成时间
+        update_post_meta($post_id, '_ai_cg_summary_generated', current_time('mysql'));
+
+        wp_send_json_success(array('summary' => $summary));
+    }
+
+    /**
+     * AJAX: 生成图片
+     */
+    public function generate_image_ajax() {
+        check_ajax_referer('ai_cg_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('权限不足');
+            return;
+        }
+
+        $post_id = isset($_POST['post_id']) ? intval($_POST['post_id']) : 0;
+        if (!$post_id) {
+            wp_send_json_error('文章ID无效');
+            return;
+        }
+
+        $post = get_post($post_id);
+        if (!$post) {
+            wp_send_json_error('文章不存在');
+            return;
+        }
+
+        $api = AI_Content_Generator_API::get_instance();
+
+        // 检查是否被排除
+        if ($api->is_post_excluded($post_id)) {
+            wp_send_json_error('这篇文章已被排除');
+            return;
+        }
+
+        $response = $api->generate_featured_image($post->post_content, $post->post_title);
+
+        if (is_wp_error($response)) {
+            wp_send_json_error($response->get_error_message());
+            return;
+        }
+
+        $image_url = $response['data'][0]['url'];
+
+        // 下载图片并上传到媒体库
+        $sideload = $this->sideload_image($image_url, $post_id);
+
+        if (is_wp_error($sideload)) {
+            wp_send_json_error($sideload->get_error_message());
+            return;
+        }
+
+        // 设置为特色图片
+        set_post_thumbnail($post_id, $sideload);
+
+        // 记录生成时间
+        update_post_meta($post_id, '_ai_cg_image_generated', current_time('mysql'));
+
+        wp_send_json_success(array('image_url' => wp_get_attachment_url($sideload)));
+    }
+
+    /**
+     * AJAX: 生成图片描述
+     */
+    public function generate_image_description_ajax() {
+        check_ajax_referer('ai_cg_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('权限不足');
+            return;
+        }
+
+        $post_id = isset($_POST['post_id']) ? intval($_POST['post_id']) : 0;
+
+        if (!$post_id) {
+            wp_send_json_error('文章ID无效');
+            return;
+        }
+
+        $api = AI_Content_Generator_API::get_instance();
+
+        // 检查是否被排除
+        if ($api->is_post_excluded($post_id)) {
+            wp_send_json_error('这篇文章已被排除');
+            return;
+        }
+
+        // 调用新的图片描述和重命名方法
+        $response = $api->generate_descriptions_and_rename_images($post_id);
+
+        if (is_wp_error($response)) {
+            wp_send_json_error($response->get_error_message());
+            return;
+        }
+
+        // 记录处理时间
+        update_post_meta($post_id, '_ai_cg_image_description_generated', current_time('mysql'));
+        update_post_meta($post_id, '_ai_cg_image_description_count', $response['renamed']);
+
+        wp_send_json_success($response);
+    }
+
+    /**
+     * AJAX: AI润色
+     */
+    public function polish_content_ajax() {
+        check_ajax_referer('ai_cg_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('权限不足');
+            return;
+        }
+
+        $post_id = isset($_POST['post_id']) ? intval($_POST['post_id']) : 0;
+        $style = isset($_POST['style']) ? sanitize_text_field($_POST['style']) : 'normal';
+
+        if (!$post_id) {
+            wp_send_json_error('文章ID无效');
+            return;
+        }
+
+        $post = get_post($post_id);
+        if (!$post) {
+            wp_send_json_error('文章不存在');
+            return;
+        }
+
+        $api = AI_Content_Generator_API::get_instance();
+
+        // 检查是否被排除
+        if ($api->is_post_excluded($post_id)) {
+            wp_send_json_error('这篇文章已被排除');
+            return;
+        }
+
+        $response = $api->polish_content($post->post_content, $style);
+
+        if (is_wp_error($response)) {
+            wp_send_json_error($response->get_error_message());
+            return;
+        }
+
+        $polished_content = $response['choices'][0]['message']['content'];
+
+        // 更新文章内容
+        wp_update_post(array(
+            'ID' => $post_id,
+            'post_content' => $polished_content
+        ));
+
+        // 记录润色时间
+        update_post_meta($post_id, '_ai_cg_polished_at', current_time('mysql'));
+        update_post_meta($post_id, '_ai_cg_polish_style', $style);
+
+        wp_send_json_success(array('content' => $polished_content));
+    }
+
+    /**
+     * AJAX: AI排版
+     */
+    public function reformat_content_ajax() {
+        check_ajax_referer('ai_cg_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('权限不足');
+            return;
+        }
+
+        $post_id = isset($_POST['post_id']) ? intval($_POST['post_id']) : 0;
+        $format_type = isset($_POST['format_type']) ? sanitize_text_field($_POST['format_type']) : 'standard';
+
+        if (!$post_id) {
+            wp_send_json_error('文章ID无效');
+            return;
+        }
+
+        $post = get_post($post_id);
+        if (!$post) {
+            wp_send_json_error('文章不存在');
+            return;
+        }
+
+        $api = AI_Content_Generator_API::get_instance();
+
+        // 检查是否被排除
+        if ($api->is_post_excluded($post_id)) {
+            wp_send_json_error('这篇文章已被排除');
+            return;
+        }
+
+        $response = $api->reformat_content($post->post_content, $format_type);
+
+        if (is_wp_error($response)) {
+            wp_send_json_error($response->get_error_message());
+            return;
+        }
+
+        $formatted_content = $response['choices'][0]['message']['content'];
+
+        // 更新文章内容
+        wp_update_post(array(
+            'ID' => $post_id,
+            'post_content' => $formatted_content
+        ));
+
+        // 记录排版时间
+        update_post_meta($post_id, '_ai_cg_reformatted_at', current_time('mysql'));
+        update_post_meta($post_id, '_ai_cg_reformat_type', $format_type);
+
+        wp_send_json_success(array('content' => $formatted_content));
+    }
+
+    /**
+     * AJAX: 批量排除文章
+     */
+    public function batch_exclude_ajax() {
+        check_ajax_referer('ai_cg_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('权限不足');
+            return;
+        }
+
+        $post_ids = isset($_POST['post_ids']) ? explode(',', $_POST['post_ids']) : array();
+
+        if (empty($post_ids)) {
+            wp_send_json_error('没有选择文章');
+            return;
+        }
+
+        // 获取当前排除文章ID列表
+        $excluded_posts = get_option('ai_cg_excluded_posts', '');
+        $excluded_post_ids = array_filter(array_map('trim', explode(',', $excluded_posts)));
+
+        // 添加新的文章ID
+        $added_count = 0;
+        foreach ($post_ids as $post_id) {
+            $post_id = intval($post_id);
+            if ($post_id && !in_array(strval($post_id), $excluded_post_ids)) {
+                $excluded_post_ids[] = strval($post_id);
+                $added_count++;
+            }
+        }
+
+        // 保存更新后的列表
+        update_option('ai_cg_excluded_posts', implode(',', $excluded_post_ids));
+
+        wp_send_json_success(array(
+            'added' => $added_count,
+            'total' => count($excluded_post_ids)
+        ));
+    }
+
+    /**
+     * AJAX: 从排除列表中移除文章
+     */
+    public function remove_from_excluded_ajax() {
+        check_ajax_referer('ai_cg_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('权限不足');
+            return;
+        }
+
+        $post_ids = isset($_POST['post_ids']) ? explode(',', $_POST['post_ids']) : array();
+
+        if (empty($post_ids)) {
+            wp_send_json_error('没有选择文章');
+            return;
+        }
+
+        // 获取当前排除文章ID列表
+        $excluded_posts = get_option('ai_cg_excluded_posts', '');
+        $excluded_post_ids = array_filter(array_map('trim', explode(',', $excluded_posts)));
+
+        // 移除指定的文章ID
+        $removed_count = 0;
+        foreach ($post_ids as $post_id) {
+            $post_id = strval(intval($post_id));
+            $index = array_search($post_id, $excluded_post_ids);
+            if ($index !== false) {
+                unset($excluded_post_ids[$index]);
+                $removed_count++;
+            }
+        }
+
+        // 保存更新后的列表
+        update_option('ai_cg_excluded_posts', implode(',', $excluded_post_ids));
+
+        wp_send_json_success(array(
+            'removed' => $removed_count,
+            'total' => count($excluded_post_ids)
+        ));
+    }
+
+    /**
+     * 下载图片并上传到媒体库
+     */
+    private function sideload_image($image_url, $post_id) {
+        require_once(ABSPATH . 'wp-admin/includes/file.php');
+        require_once(ABSPATH . 'wp-admin/includes/media.php');
+        require_once(ABSPATH . 'wp-admin/includes/image.php');
+
+        // 下载图片
+        $tmp = download_url($image_url);
+        if (is_wp_error($tmp)) {
+            return $tmp;
+        }
+
+        // 准备上传
+        $file_array = array(
+            'name' => basename($image_url),
+            'tmp_name' => $tmp
+        );
+
+        $id = media_handle_sideload($file_array, $post_id);
+
+        if (is_wp_error($id)) {
+            @unlink($file_array['tmp_name']);
+            return $id;
+        }
+
+        return $id;
     }
 }

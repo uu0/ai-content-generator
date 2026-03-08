@@ -6,25 +6,43 @@
             <form method="get" action="">
                 <input type="hidden" name="page" value="ai-content-generator">
 
-                <select name="filter" id="ai-cg-filter">
-                    <option value="all" <?php selected(isset($_GET['filter']) ? $_GET['filter'] : '', 'all'); ?>>全部文章</option>
-                    <option value="no_summary" <?php selected(isset($_GET['filter']) ? $_GET['filter'] : '', 'no_summary'); ?>>没有摘要</option>
-                    <option value="no_image" <?php selected(isset($_GET['filter']) ? $_GET['filter'] : '', 'no_image'); ?>>没有特色图片</option>
-                    <option value="has_summary" <?php selected(isset($_GET['filter']) ? $_GET['filter'] : '', 'has_summary'); ?>>有摘要</option>
-                    <option value="has_image" <?php selected(isset($_GET['filter']) ? $_GET['filter'] : '', 'has_image'); ?>>有特色图片</option>
-                </select>
-
-                <button type="submit" class="button">筛选</button>
-            </form>
+            <div class="ai-cg-bulk-actions">
+                <button type="button" class="button ai-cg-bulk-summary" data-post-ids="">
+                    批量生成摘要
+                </button>
+                <button type="button" class="button ai-cg-bulk-image" data-post-ids="">
+                    批量生成图片
+                </button>
+                <button type="button" class="button ai-cg-bulk-polish" data-post-ids="">
+                    批量润色
+                </button>
+                <button type="button" class="button ai-cg-bulk-reformat" data-post-ids="">
+                    批量排版
+                </button>
+                <button type="button" class="button ai-cg-bulk-description" data-post-ids="">
+                    批量描述
+                </button>
+                <button type="button" class="button ai-cg-bulk-exclude" data-post-ids="">
+                    批量排除
+                </button>
+                <button type="button" class="button ai-cg-bulk-unexclude" data-post-ids="">
+                    取消排除
+                </button>
+            </div>
         </div>
 
-        <div class="ai-cg-bulk-actions">
-            <button type="button" class="button ai-cg-bulk-summary" data-post-ids="">
-                批量生成摘要
-            </button>
-            <button type="button" class="button ai-cg-bulk-image" data-post-ids="">
-                批量生成图片
-            </button>
+        <div class="ai-cg-toolbar" style="margin-top: 15px; padding-bottom: 15px; border-bottom: 1px solid #eee;">
+            <div class="ai-cg-filters">
+                <label for="ai-cg-filter"><strong>筛选文章：</strong></label>
+                <select name="filter" id="ai-cg-filter" class="ai-cg-filter-select">
+                    <option value="all" <?php selected(isset($_GET['filter']) ? $_GET['filter'] : '', 'all'); ?>>全部文章</option>
+                    <option value="no_summary" <?php selected(isset($_GET['filter']) ? $_GET['filter'] : '', 'no_summary'); ?>>无摘要</option>
+                    <option value="no_image" <?php selected(isset($_GET['filter']) ? $_GET['filter'] : '', 'no_image'); ?>>无特色图片</option>
+                    <option value="has_summary" <?php selected(isset($_GET['filter']) ? $_GET['filter'] : '', 'has_summary'); ?>>有摘要</option>
+                    <option value="has_image" <?php selected(isset($_GET['filter']) ? $_GET['filter'] : '', 'has_image'); ?>>有特色图片</option>
+                    <option value="excluded" <?php selected(isset($_GET['filter']) ? $_GET['filter'] : '', 'excluded'); ?>>已排除</option>
+                </select>
+            </form>
         </div>
     </div>
 
@@ -34,6 +52,7 @@
                 <th class="manage-column column-cb check-column">
                     <input type="checkbox" id="ai-cg-select-all">
                 </th>
+                <th>ID</th>
                 <th>标题</th>
                 <th>状态</th>
                 <th>摘要</th>
@@ -54,6 +73,9 @@
                     <tr data-post-id="<?php echo get_the_ID(); ?>">
                         <td>
                             <input type="checkbox" class="ai-cg-post-checkbox" value="<?php echo get_the_ID(); ?>">
+                        </td>
+                        <td>
+                            <strong><?php echo get_the_ID(); ?></strong>
                         </td>
                         <td>
                             <strong>
@@ -100,12 +122,33 @@
                             </div>
                         </td>
                         <td>
-                            <button type="button" class="button button-small ai-cg-generate-summary" data-post-id="<?php echo get_the_ID(); ?>">
-                                <?php echo $has_summary ? '重新生成摘要' : '生成摘要'; ?>
-                            </button>
-                            <button type="button" class="button button-small ai-cg-generate-image" data-post-id="<?php echo get_the_ID(); ?>">
-                                <?php echo $has_image ? '重新生成图片' : '生成图片'; ?>
-                            </button>
+                            <div class="ai-cg-action-buttons">
+                                <button type="button" class="button button-small ai-cg-generate-summary" data-post-id="<?php echo get_the_ID(); ?>">
+                                    摘要
+                                </button>
+                                <button type="button" class="button button-small ai-cg-generate-image" data-post-id="<?php echo get_the_ID(); ?>">
+                                    图片
+                                </button>
+                                <button type="button" class="button button-small ai-cg-generate-image-description" data-post-id="<?php echo get_the_ID(); ?>" title="为图片生成描述并重命名">
+                                    描述
+                                </button>
+                                <button type="button" class="button button-small ai-cg-polish" data-post-id="<?php echo get_the_ID(); ?>" title="AI润色文章">
+                                    润色
+                                </button>
+                                <button type="button" class="button button-small ai-cg-reformat" data-post-id="<?php echo get_the_ID(); ?>" title="AI排版优化">
+                                    排版
+                                </button>
+                                <?php $api = AI_Content_Generator_API::get_instance(); ?>
+                                <?php if ($api->is_post_excluded(get_the_ID())) : ?>
+                                    <button type="button" class="button button-small ai-cg-unexclude" data-post-id="<?php echo get_the_ID(); ?>" title="从排除列表中移除">
+                                        取消排除
+                                    </button>
+                                <?php else : ?>
+                                    <button type="button" class="button button-small ai-cg-exclude" data-post-id="<?php echo get_the_ID(); ?>" title="添加到排除列表">
+                                        排除
+                                    </button>
+                                <?php endif; ?>
+                            </div>
                         </td>
                     </tr>
                 <?php endwhile; ?>

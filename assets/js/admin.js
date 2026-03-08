@@ -10,7 +10,32 @@
         initClearStats();
         initLogActions();
         initRefreshModels();
+        initAutoFilter();
     });
+
+    // 自动筛选功能
+    function initAutoFilter() {
+        var filterSelect = $('#ai-cg-filter');
+
+        // 只在元素存在时绑定事件
+        if (filterSelect.length > 0) {
+            filterSelect.on('change', function() {
+                // 获取当前URL
+                var url = new URL(window.location.href);
+
+                // 更新或添加filter参数
+                var filterValue = $(this).val();
+                if (filterValue === 'all') {
+                    url.searchParams.delete('filter');
+                } else {
+                    url.searchParams.set('filter', filterValue);
+                }
+
+                // 跳转到新URL
+                window.location.href = url.toString();
+            });
+        }
+    }
 
     // 初始化生成操作
     function initGenerateActions() {
@@ -24,6 +49,36 @@
         $(document).on('click', '.ai-cg-generate-image:not(.ai-cg-bulk-image)', function(e) {
             e.preventDefault();
             generateFeaturedImage($(this));
+        });
+
+        // 生成图片描述
+        $(document).on('click', '.ai-cg-generate-image-description', function(e) {
+            e.preventDefault();
+            generateImageDescription($(this));
+        });
+
+        // AI润色
+        $(document).on('click', '.ai-cg-polish:not(.ai-cg-bulk-polish)', function(e) {
+            e.preventDefault();
+            polishContent($(this));
+        });
+
+        // AI排版
+        $(document).on('click', '.ai-cg-reformat:not(.ai-cg-bulk-reformat)', function(e) {
+            e.preventDefault();
+            reformatContent($(this));
+        });
+
+        // 排除文章
+        $(document).on('click', '.ai-cg-exclude', function(e) {
+            e.preventDefault();
+            excludePost($(this));
+        });
+
+        // 取消排除文章
+        $(document).on('click', '.ai-cg-unexclude', function(e) {
+            e.preventDefault();
+            unexcludePost($(this));
         });
     }
 
@@ -99,10 +154,143 @@
         });
     }
 
+    // 生成图片描述
+    function generateImageDescription(button) {
+        var postId = button.data('post-id');
+
+        if (!postId) {
+            alert('无效的文章ID');
+            return;
+        }
+
+        if (!confirm('确定要为这篇文章的图片生成描述并重命名吗？\n\n注意：此操作会修改图片文件名，请确保已备份。')) {
+            return;
+        }
+
+        showLoading(true); // 图片描述需要较长时间
+
+        $.ajax({
+            url: ai_cg_data.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'ai_cg_generate_image_description',
+                post_id: postId,
+                nonce: ai_cg_data.nonce
+            },
+            success: function(response) {
+                hideLoading();
+                if (response.success) {
+                    alert('图片描述生成成功！\n\n处理了 ' + response.data.total + ' 张图片，重命名 ' + response.data.renamed + ' 张。');
+                    // 刷新页面
+                    location.reload();
+                } else {
+                    alert('生成失败：' + response.data);
+                }
+            },
+            error: function() {
+                hideLoading();
+                alert('网络错误，请稍后重试');
+            }
+        });
+    }
+
+    // AI润色
+    function polishContent(button) {
+        var postId = button.data('post-id');
+
+        if (!postId) {
+            alert('无效的文章ID');
+            return;
+        }
+
+        // 让用户选择润色风格
+        var style = prompt('选择润色风格：\n\n1. normal - 标准润色\n2. formal - 正式风格\n3. casual - 轻松风格\n4. creative - 创意风格\n\n请输入数字或风格名称 (默认：normal)：', 'normal');
+
+        if (!style) {
+            return;
+        }
+
+        showLoading();
+
+        $.ajax({
+            url: ai_cg_data.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'ai_cg_polish_content',
+                post_id: postId,
+                style: style,
+                nonce: ai_cg_data.nonce
+            },
+            success: function(response) {
+                hideLoading();
+                if (response.success) {
+                    alert('内容润色成功！');
+                    // 刷新页面
+                    location.reload();
+                } else {
+                    alert('润色失败：' + response.data);
+                }
+            },
+            error: function() {
+                hideLoading();
+                alert('网络错误，请稍后重试');
+            }
+        });
+    }
+
+    // AI排版
+    function reformatContent(button) {
+        var postId = button.data('post-id');
+
+        if (!postId) {
+            alert('无效的文章ID');
+            return;
+        }
+
+        // 让用户选择排版类型
+        var formatType = prompt('选择排版类型：\n\n1. standard - 标准排版\n2. blog - 博客格式\n3. technical - 技术文档格式\n\n请输入数字或类型名称 (默认：standard)：', 'standard');
+
+        if (!formatType) {
+            return;
+        }
+
+        showLoading();
+
+        $.ajax({
+            url: ai_cg_data.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'ai_cg_reformat_content',
+                post_id: postId,
+                format_type: formatType,
+                nonce: ai_cg_data.nonce
+            },
+            success: function(response) {
+                hideLoading();
+                if (response.success) {
+                    alert('内容排版成功！');
+                    // 刷新页面
+                    location.reload();
+                } else {
+                    alert('排版失败：' + response.data);
+                }
+            },
+            error: function() {
+                hideLoading();
+                alert('网络错误，请稍后重试');
+            }
+        });
+    }
+
     // 初始化批量操作
     function initBulkActions() {
         var bulkSummary = $('.ai-cg-bulk-summary');
         var bulkImage = $('.ai-cg-bulk-image');
+        var bulkPolish = $('.ai-cg-bulk-polish');
+        var bulkReformat = $('.ai-cg-bulk-reformat');
+        var bulkDescription = $('.ai-cg-bulk-description');
+        var bulkExclude = $('.ai-cg-bulk-exclude');
+        var bulkUnexclude = $('.ai-cg-bulk-unexclude');
 
         // 更新选中文章ID
         function updateSelectedIds() {
@@ -112,6 +300,11 @@
 
             bulkSummary.attr('data-post-ids', selectedIds.join(','));
             bulkImage.attr('data-post-ids', selectedIds.join(','));
+            bulkPolish.attr('data-post-ids', selectedIds.join(','));
+            bulkReformat.attr('data-post-ids', selectedIds.join(','));
+            bulkDescription.attr('data-post-ids', selectedIds.join(','));
+            bulkExclude.attr('data-post-ids', selectedIds.join(','));
+            bulkUnexclude.attr('data-post-ids', selectedIds.join(','));
         }
 
         $(document).on('change', '.ai-cg-post-checkbox', function() {
@@ -146,6 +339,96 @@
             }
 
             generateBulkImage(postIds);
+        });
+
+        // 批量润色
+        bulkPolish.on('click', function() {
+            var postIds = $(this).attr('data-post-ids');
+            if (!postIds) {
+                alert('请先选择要处理的文章');
+                return;
+            }
+
+            var style = prompt('批量润色风格：\n\n1. normal - 标准润色\n2. formal - 正式风格\n3. casual - 轻松风格\n4. creative - 创意风格\n\n请输入数字或风格名称 (默认：normal)：', 'normal');
+
+            if (!style) {
+                return;
+            }
+
+            if (!confirm('确定要为选中的 ' + postIds.split(',').length + ' 篇文章进行润色吗？')) {
+                return;
+            }
+
+            generateBulkPolish(postIds, style);
+        });
+
+        // 批量排版
+        bulkReformat.on('click', function() {
+            var postIds = $(this).attr('data-post-ids');
+            if (!postIds) {
+                alert('请先选择要处理的文章');
+                return;
+            }
+
+            var formatType = prompt('批量排版类型：\n\n1. standard - 标准排版\n2. blog - 博客格式\n3. technical - 技术文档格式\n\n请输入数字或类型名称 (默认：standard)：', 'standard');
+
+            if (!formatType) {
+                return;
+            }
+
+            if (!confirm('确定要为选中的 ' + postIds.split(',').length + ' 篇文章进行排版吗？')) {
+                return;
+            }
+
+            generateBulkReformat(postIds, formatType);
+        });
+
+        // 批量图片描述
+        var bulkDescription = $('.ai-cg-bulk-description');
+        bulkDescription.on('click', function() {
+            var postIds = $(this).attr('data-post-ids');
+            if (!postIds) {
+                alert('请先选择要处理的文章');
+                return;
+            }
+
+            if (!confirm('确定要为选中的 ' + postIds.split(',').length + ' 篇文章的图片生成描述并重命名吗？\n\n注意：此操作会修改图片文件名，请确保已备份。')) {
+                return;
+            }
+
+            generateBulkDescription(postIds);
+        });
+
+        // 批量排除
+        var bulkExclude = $('.ai-cg-bulk-exclude');
+        bulkExclude.on('click', function() {
+            var postIds = $(this).attr('data-post-ids');
+            if (!postIds) {
+                alert('请先选择要排除的文章');
+                return;
+            }
+
+            if (!confirm('确定要将选中的 ' + postIds.split(',').length + ' 篇文章添加到排除列表吗？')) {
+                return;
+            }
+
+            bulkExcludePosts(postIds);
+        });
+
+        // 批量取消排除
+        var bulkUnexclude = $('.ai-cg-bulk-unexclude');
+        bulkUnexclude.on('click', function() {
+            var postIds = $(this).attr('data-post-ids');
+            if (!postIds) {
+                alert('请先选择要取消排除的文章');
+                return;
+            }
+
+            if (!confirm('确定要将选中的 ' + postIds.split(',').length + ' 篇文章从排除列表中移除吗？')) {
+                return;
+            }
+
+            bulkUnexcludePosts(postIds);
         });
 
         // 批量生成摘要
@@ -228,6 +511,96 @@
                     complete: function() {
                         currentIndex++;
                         setTimeout(processNextImage, 2000); // 图片生成需要更多时间
+                    }
+                });
+            }
+        }
+
+        // 批量润色
+        function generateBulkPolish(postIds, style) {
+            var ids = postIds.split(',');
+            var currentIndex = 0;
+
+            showLoading();
+
+            processNextPolish();
+
+            function processNextPolish() {
+                if (currentIndex >= ids.length) {
+                    hideLoading();
+                    alert('批量润色完成！');
+                    location.reload();
+                    return;
+                }
+
+                var postId = ids[currentIndex];
+                $.ajax({
+                    url: ai_cg_data.ajax_url,
+                    type: 'POST',
+                    data: {
+                        action: 'ai_cg_polish_content',
+                        post_id: postId,
+                        style: style,
+                        nonce: ai_cg_data.nonce
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            console.log('文章 ' + postId + ' 润色成功');
+                        } else {
+                            console.error('文章 ' + postId + ' 润色失败：', response.data);
+                        }
+                    },
+                    error: function() {
+                        console.error('文章 ' + postId + ' 请求失败');
+                    },
+                    complete: function() {
+                        currentIndex++;
+                        setTimeout(processNextPolish, 1000); // 避免请求过快
+                    }
+                });
+            }
+        }
+
+        // 批量排版
+        function generateBulkReformat(postIds, formatType) {
+            var ids = postIds.split(',');
+            var currentIndex = 0;
+
+            showLoading();
+
+            processNextReformat();
+
+            function processNextReformat() {
+                if (currentIndex >= ids.length) {
+                    hideLoading();
+                    alert('批量排版完成！');
+                    location.reload();
+                    return;
+                }
+
+                var postId = ids[currentIndex];
+                $.ajax({
+                    url: ai_cg_data.ajax_url,
+                    type: 'POST',
+                    data: {
+                        action: 'ai_cg_reformat_content',
+                        post_id: postId,
+                        format_type: formatType,
+                        nonce: ai_cg_data.nonce
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            console.log('文章 ' + postId + ' 排版成功');
+                        } else {
+                            console.error('文章 ' + postId + ' 排版失败：', response.data);
+                        }
+                    },
+                    error: function() {
+                        console.error('文章 ' + postId + ' 请求失败');
+                    },
+                    complete: function() {
+                        currentIndex++;
+                        setTimeout(processNextReformat, 1000); // 避免请求过快
                     }
                 });
             }
@@ -474,6 +847,184 @@
                     statusSpan.text('网络错误，请稍后重试').css('color', 'red');
                 }
             });
+        });
+    }
+
+    // 批量图片描述
+    function generateBulkDescription(postIds) {
+        var ids = postIds.split(',');
+        var currentIndex = 0;
+
+        showLoading(true); // 批量描述需要较长时间
+
+        function processNextDescription() {
+            if (currentIndex >= ids.length) {
+                hideLoading();
+                alert('批量图片描述完成！');
+                location.reload();
+                return;
+            }
+
+            var postId = ids[currentIndex];
+            $.ajax({
+                url: ai_cg_data.ajax_url,
+                type: 'POST',
+                data: {
+                    action: 'ai_cg_generate_image_description',
+                    post_id: postId,
+                    nonce: ai_cg_data.nonce
+                },
+                success: function(response) {
+                    if (response.success) {
+                        console.log('文章 ' + postId + ' 图片描述成功，处理了 ' + response.data.total + ' 张图片，重命名 ' + response.data.renamed + ' 张');
+                    } else {
+                        console.error('文章 ' + postId + ' 图片描述失败：', response.data);
+                    }
+                },
+                error: function() {
+                    console.error('文章 ' + postId + ' 请求失败');
+                },
+                complete: function() {
+                    currentIndex++;
+                    setTimeout(processNextDescription, 2000); // 避免请求过快，图片处理需要时间
+                }
+            });
+        }
+
+        processNextDescription();
+    }
+
+    // 批量排除
+    function bulkExcludePosts(postIds) {
+        showLoading();
+
+        $.ajax({
+            url: ai_cg_data.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'ai_cg_batch_exclude',
+                post_ids: postIds,
+                nonce: ai_cg_data.nonce
+            },
+            success: function(response) {
+                hideLoading();
+                if (response.success) {
+                    alert('批量排除成功！已添加 ' + response.data.added + ' 篇文章到排除列表，共 ' + response.data.total + ' 篇。');
+                    location.reload();
+                } else {
+                    alert('排除失败：' + response.data);
+                }
+            },
+            error: function() {
+                hideLoading();
+                alert('网络错误，请稍后重试');
+            }
+        });
+    }
+
+    // 批量取消排除
+    function bulkUnexcludePosts(postIds) {
+        showLoading();
+
+        $.ajax({
+            url: ai_cg_data.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'ai_cg_remove_from_excluded',
+                post_ids: postIds,
+                nonce: ai_cg_data.nonce
+            },
+            success: function(response) {
+                hideLoading();
+                if (response.success) {
+                    alert('取消排除成功！已从排除列表移除 ' + response.data.removed + ' 篇文章。');
+                    location.reload();
+                } else {
+                    alert('取消排除失败：' + response.data);
+                }
+            },
+            error: function() {
+                hideLoading();
+                alert('网络错误，请稍后重试');
+            }
+        });
+    }
+
+    // 排除单篇文章
+    function excludePost(button) {
+        var postId = button.data('post-id');
+
+        if (!postId) {
+            alert('无效的文章ID');
+            return;
+        }
+
+        if (!confirm('确定要将这篇文章添加到排除列表吗？')) {
+            return;
+        }
+
+        showLoading();
+
+        $.ajax({
+            url: ai_cg_data.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'ai_cg_batch_exclude',
+                post_ids: postId,
+                nonce: ai_cg_data.nonce
+            },
+            success: function(response) {
+                hideLoading();
+                if (response.success) {
+                    alert('已添加到排除列表！');
+                    location.reload();
+                } else {
+                    alert('排除失败：' + response.data);
+                }
+            },
+            error: function() {
+                hideLoading();
+                alert('网络错误，请稍后重试');
+            }
+        });
+    }
+
+    // 取消排除单篇文章
+    function unexcludePost(button) {
+        var postId = button.data('post-id');
+
+        if (!postId) {
+            alert('无效的文章ID');
+            return;
+        }
+
+        if (!confirm('确定要移除这篇文章的排除状态吗？')) {
+            return;
+        }
+
+        showLoading();
+
+        $.ajax({
+            url: ai_cg_data.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'ai_cg_remove_from_excluded',
+                post_ids: postId,
+                nonce: ai_cg_data.nonce
+            },
+            success: function(response) {
+                hideLoading();
+                if (response.success) {
+                    alert('已从排除列表移除！');
+                    location.reload();
+                } else {
+                    alert('取消排除失败：' + response.data);
+                }
+            },
+            error: function() {
+                hideLoading();
+                alert('网络错误，请稍后重试');
+            }
         });
     }
 

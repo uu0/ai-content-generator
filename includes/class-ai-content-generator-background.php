@@ -90,6 +90,19 @@ class AI_Content_Generator_Background {
             )
         );
 
+        // 应用排除规则
+        $excluded_categories = get_option('ai_cg_excluded_categories', '');
+        $excluded_category_ids = array_filter(array_map('trim', explode(',', $excluded_categories)));
+        if (!empty($excluded_category_ids)) {
+            $args['category__not_in'] = $excluded_category_ids;
+        }
+
+        $excluded_posts = get_option('ai_cg_excluded_posts', '');
+        $excluded_post_ids = array_filter(array_map('trim', explode(',', $excluded_posts)));
+        if (!empty($excluded_post_ids)) {
+            $args['post__not_in'] = $excluded_post_ids;
+        }
+
         $query = new WP_Query($args);
         return $query->posts;
     }
@@ -115,6 +128,19 @@ class AI_Content_Generator_Background {
                 )
             )
         );
+
+        // 应用排除规则
+        $excluded_categories = get_option('ai_cg_excluded_categories', '');
+        $excluded_category_ids = array_filter(array_map('trim', explode(',', $excluded_categories)));
+        if (!empty($excluded_category_ids)) {
+            $args['category__not_in'] = $excluded_category_ids;
+        }
+
+        $excluded_posts = get_option('ai_cg_excluded_posts', '');
+        $excluded_post_ids = array_filter(array_map('trim', explode(',', $excluded_posts)));
+        if (!empty($excluded_post_ids)) {
+            $args['post__not_in'] = $excluded_post_ids;
+        }
 
         $query = new WP_Query($args);
         return $query->posts;

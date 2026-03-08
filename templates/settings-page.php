@@ -105,6 +105,112 @@
                             <p class="description">选择用于生成特色图片的AI模型。共 <strong id="ai-cg-image-models-count"><?php echo count($models['image']); ?></strong> 个可用模型。</p>
                         </td>
                     </tr>
+                    <tr>
+                        <th scope="row">图片描述模型</th>
+                        <td>
+                            <select name="ai_cg_image_description_model" id="ai-cg-image-description-model" class="regular-text">
+                                <?php
+                                $selected_model = get_option('ai_cg_image_description_model', 'deepseek-chat');
+
+                                foreach ($models['chat'] as $model_key => $model_name) :
+                                    ?>
+                                    <option value="<?php echo esc_attr($model_key); ?>" <?php selected($selected_model, $model_key); ?>>
+                                        <?php echo esc_html($model_name); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <p class="description">选择用于生成图片描述的AI模型。根据文章内容为每张图片生成10字左右描述并重命名文件。</p>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+
+            <div class="ai-cg-setting-section">
+                <h2>提示词模板</h2>
+                <p class="description">自定义AI生成的提示词，让生成结果更符合您的需求。支持使用 <code>{title}</code> 和 <code>{content}</code> 占位符。</p>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row">摘要生成提示词</th>
+                        <td>
+                            <textarea name="ai_cg_summary_prompt" rows="3" class="large-text" placeholder="留空使用默认提示词"><?php echo esc_textarea(get_option('ai_cg_summary_prompt', '')); ?></textarea>
+                            <p class="description">自定义文章摘要生成的提示词。默认：请为文章生成100-200字的简洁摘要。</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">图片生成提示词模板</th>
+                        <td>
+                            <textarea name="ai_cg_image_prompt" rows="3" class="large-text" placeholder="留空使用默认提示词"><?php echo esc_textarea(get_option('ai_cg_image_prompt', '')); ?></textarea>
+                            <p class="description">自定义特色图片生成的提示词模板。默认：简约、专业、现代风格。</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">图片描述生成提示词</th>
+                        <td>
+                            <textarea name="ai_cg_image_description_prompt" rows="3" class="large-text" placeholder="留空使用默认提示词"><?php echo esc_textarea(get_option('ai_cg_image_description_prompt', '')); ?></textarea>
+                            <p class="description">自定义图片描述生成的提示词。默认：请详细描述图片内容。</p>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+
+            <div class="ai-cg-setting-section">
+                <h2>润色提示词</h2>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row">标准润色</th>
+                        <td>
+                            <textarea name="ai_cg_polish_prompt_normal" rows="2" class="large-text code" placeholder="留空使用默认提示词"><?php echo esc_textarea(get_option('ai_cg_polish_prompt_normal', '')); ?></textarea>
+                            <p class="description">改善表达流畅度和可读性</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">正式风格</th>
+                        <td>
+                            <textarea name="ai_cg_polish_prompt_formal" rows="2" class="large-text code" placeholder="留空使用默认提示词"><?php echo esc_textarea(get_option('ai_cg_polish_prompt_formal', '')); ?></textarea>
+                            <p class="description">改写为正式、专业的书面语风格</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">轻松风格</th>
+                        <td>
+                            <textarea name="ai_cg_polish_prompt_casual" rows="2" class="large-text code" placeholder="留空使用默认提示词"><?php echo esc_textarea(get_option('ai_cg_polish_prompt_casual', '')); ?></textarea>
+                            <p class="description">改写为轻松、友好的口语风格</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">创意风格</th>
+                        <td>
+                            <textarea name="ai_cg_polish_prompt_creative" rows="2" class="large-text code" placeholder="留空使用默认提示词"><?php echo esc_textarea(get_option('ai_cg_polish_prompt_creative', '')); ?></textarea>
+                            <p class="description">改写为富有创意和吸引力的风格</p>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+
+            <div class="ai-cg-setting-section">
+                <h2>排版提示词</h2>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row">标准排版</th>
+                        <td>
+                            <textarea name="ai_cg_reformat_prompt_standard" rows="2" class="large-text code" placeholder="留空使用默认提示词"><?php echo esc_textarea(get_option('ai_cg_reformat_prompt_standard', '')); ?></textarea>
+                            <p class="description">添加标题、合理分段、使用项目符号</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">博客格式</th>
+                        <td>
+                            <textarea name="ai_cg_reformat_prompt_blog" rows="2" class="large-text code" placeholder="留空使用默认提示词"><?php echo esc_textarea(get_option('ai_cg_reformat_prompt_blog', '')); ?></textarea>
+                            <p class="description">排版为博客文章格式，优化阅读体验</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">技术文档格式</th>
+                        <td>
+                            <textarea name="ai_cg_reformat_prompt_technical" rows="2" class="large-text code" placeholder="留空使用默认提示词"><?php echo esc_textarea(get_option('ai_cg_reformat_prompt_technical', '')); ?></textarea>
+                            <p class="description">排版为技术文档格式，使用代码块和层级结构</p>
+                        </td>
+                    </tr>
                 </table>
             </div>
 

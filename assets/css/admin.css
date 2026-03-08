@@ -264,3 +264,33 @@
     width: 16px;
     height: 16px;
 }
+
+/* 操作按钮样式 */
+.ai-cg-action-buttons {
+    display: flex;
+    gap: 5px;
+    flex-wrap: wrap;
+}
+
+.ai-cg-action-buttons .button {
+    padding: 4px 8px;
+    font-size: 12px;
+    line-height: 1.5;
+}
+
+.ai-cg-action-buttons .button.loading {
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+.ai-cg-action-buttons .button.success {
+    background-color: #e6f5e6;
+    color: #2d7f2d;
+    border-color: #2d7f2d;
+}
+
+.ai-cg-action-buttons .button.error {
+    background-color: #ffe6e6;
+    color: #d12e2e;
+    border-color: #d12e2e;
+}
