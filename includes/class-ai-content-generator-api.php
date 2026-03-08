@@ -439,34 +439,21 @@ class AI_Content_Generator_API {
     private function extract_images_from_content($content, $post_id = 0) {
         $images = array();
 
-        // 方法1: 使用 WordPress 的 get_content_attachments 函数
-        global $wpdb;
-        global $post;
-        $backup_post = $post;
-
-        if ($post_id > 0) {
-            $post = get_post($post_id);
-        }
-
-        if (!empty($post)) {
-            $attachments = get_content_attachments();
+        // 方法1: 使用 WordPress 的 get_attached_media 函数获取文章附件
+        if ($post_id > 0 && get_post($post_id)) {
+            $attachments = get_attached_media('image', $post_id);
             foreach ($attachments as $attachment) {
-                if ($attachment->post_type === 'attachment' && wp_attachment_is('image', $attachment->ID)) {
-                    $attachment_id = $attachment->ID;
-                    if (!isset($images[$attachment_id])) {
-                        $images[$attachment_id] = array(
-                            'attachment_id' => $attachment_id,
-                            'src' => wp_get_attachment_url($attachment_id),
-                            'alt' => get_post_meta($attachment_id, '_wp_attachment_image_alt', true),
-                            'title' => $attachment->post_title
-                        );
-                    }
+                $attachment_id = $attachment->ID;
+                if (!isset($images[$attachment_id])) {
+                    $images[$attachment_id] = array(
+                        'attachment_id' => $attachment_id,
+                        'src' => wp_get_attachment_url($attachment_id),
+                        'alt' => get_post_meta($attachment_id, '_wp_attachment_image_alt', true),
+                        'title' => $attachment->post_title
+                    );
                 }
             }
         }
-
-        // 恢复全局 $post
-        $post = $backup_post;
 
         // 方法2: 匹配 <img> 标签（作为补充）
         if (preg_match_all('/<img[^>]+>/i', $content, $matches)) {
