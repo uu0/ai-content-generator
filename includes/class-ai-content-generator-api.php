@@ -544,13 +544,27 @@ class AI_Content_Generator_API {
         $path_info = pathinfo($old_path);
         $extension = isset($path_info['extension']) ? '.' . $path_info['extension'] : '';
 
-        // 清理描述字符串（移除特殊字符，只保留中英文和数字）
-        $clean_description = preg_replace('/[^a-zA-Z0-9\u4e00-\u9fa5\s]/', '', $description);
+        // 清理描述字符串（第一轮：只保留中英文、数字和基本标点）
+        $clean_description = preg_replace('/[^a-zA-Z0-9\u4e00-\u9fa5\s\-_]/', '', $description);
         $clean_description = trim($clean_description);
         $clean_description = mb_substr($clean_description, 0, 50, 'UTF-8'); // 限制长度
 
+        // 如果清理后仍然为空，尝试更宽松的清理（保留所有中英文和数字字符）
         if (empty($clean_description)) {
-            return new WP_Error('invalid_description', '描述无效');
+            error_log('AI Content Generator: 描述清理后为空（第一轮） - 原始描述: "' . $description . '" - 附件ID: ' . $attachment_id);
+            // 第二轮：只移除ASCII特殊字符，保留中英文
+            $clean_description = preg_replace('/[\x00-\x1F\x7F]/', '', $description);
+            $clean_description = preg_replace('/[\/\\\\:*?"<>|]/', '', $clean_description); // 移除文件系统不允许的字符
+            $clean_description = trim($clean_description);
+            $clean_description = mb_substr($clean_description, 0, 50, 'UTF-8');
+
+            error_log('AI Content Generator: 描述清理后为空（第二轮） - 清理后: "' . $clean_description . '"');
+        }
+
+        // 如果仍然为空，使用默认描述
+        if (empty($clean_description)) {
+            error_log('AI Content Generator: 描述完全无效，使用默认描述 - 附件ID: ' . $attachment_id);
+            $clean_description = 'image-' . $attachment_id;
         }
 
         // 构建新文件名
