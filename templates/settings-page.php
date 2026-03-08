@@ -278,6 +278,35 @@
                 </table>
             </div>
 
+            <div class="ai-cg-setting-section">
+                <h2>数据管理</h2>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row">删除插件时清除所有数据</th>
+                        <td>
+                            <label>
+                                <input type="checkbox" name="ai_cg_delete_data_on_uninstall" value="1" <?php checked(get_option('ai_cg_delete_data_on_uninstall'), 1); ?>>
+                                删除插件时一并清除所有数据
+                            </label>
+                            <p class="description" style="color: #d63638;">
+                                <strong>警告：</strong>启用此选项后，删除插件时会永久清除以下所有数据：
+                            </p>
+                            <ul style="color: #d63638; margin: 10px 0 0 20px; font-size: 13px;">
+                                <li>API密钥和所有设置选项</li>
+                                <li>Token统计记录</li>
+                                <li>文章的AI生成记录（摘要、图片描述等）</li>
+                                <li>自定义提示词</li>
+                                <li>排除规则设置</li>
+                                <li>缓存的模型列表</li>
+                            </ul>
+                            <p class="description" style="color: #666; margin-top: 10px;">
+                                如需保留数据以便将来恢复使用，请不要勾选此选项。禁用时只会清除定时任务，不会删除任何数据。
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+
             <?php submit_button('保存设置'); ?>
         </div>
     </form>

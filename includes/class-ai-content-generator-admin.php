@@ -112,6 +112,9 @@ class AI_Content_Generator_Admin {
             'sanitize_callback' => array($this, 'sanitize_excluded_ids')
         ));
         register_setting('ai_cg_settings', 'ai_cg_excluded_posts');
+
+        // 新增：数据管理设置
+        register_setting('ai_cg_settings', 'ai_cg_delete_data_on_uninstall');
     }
 
     /**
