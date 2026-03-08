@@ -94,8 +94,8 @@ class AI_Content_Generator {
         add_option('ai_cg_api_key', '');
         add_option('ai_cg_summary_enabled', 0);
         add_option('ai_cg_featured_image_enabled', 0);
-        add_option('ai_cg_summary_model', 'deepseek-chat');
-        add_option('ai_cg_image_model', 'stable-diffusion-3');
+        add_option('ai_cg_summary_model', 'deepseek-ai/DeepSeek-V3.2');
+        add_option('ai_cg_image_model', 'Qwen/Qwen-Image');
         add_option('ai_cg_auto_check_enabled', 0);
 
         // 设置定时任务

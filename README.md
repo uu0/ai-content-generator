@@ -6,6 +6,8 @@
 
 - ✅ 自动生成文章摘要
 - ✅ 自动生成特色图片
+- ✅ 文章润色功能（标准、正式、轻松、创意四种风格）
+- ✅ 文章排版功能（标准、博客、技术文档三种格式）
 - ✅ 支持多个AI模型（DeepSeek、Qwen、Llama、FLUX、Stable Diffusion等）
 - ✅ 功能自由开关
 - ✅ 模型自定义配置
@@ -83,16 +85,35 @@ define('WP_DEBUG_DISPLAY', false);
 
 ## 可用模型
 
-### 文本生成模型（摘要）
-- DeepSeek Chat
-- DeepSeek Coder
+### 文本生成模型（摘要、润色、排版）
+- DeepSeek-V3（默认推荐用于摘要）
+- Qwen 2.5 122B（默认推荐用于润色和排版）
+- DeepSeek Chat / Coder
 - Qwen 2.5 7B / 72B
+- Qwen 3.5 122B（推荐用于润色和排版）
 - Llama 3.1 8B / 70B
 
 ### 图片生成模型（特色图片）
+- Qwen2-VL-7B-Instruct（默认推荐）
 - FLUX.1 Dev / Schnell
 - Stable Diffusion 3
 - Stable Diffusion XL
+
+### 默认模型配置
+- **摘要生成**：deepseek-ai/DeepSeek-V3.2
+- **特色图片生成**：Qwen/Qwen-Image
+- **文章润色**：Qwen/Qwen2.5-122B-Instruct
+- **文章排版**：Qwen/Qwen2.5-122B-Instruct
+
+### 模型兼容性说明
+- ✅ **已测试模型**：deepseek-ai/DeepSeek-V3.2（摘要）、Qwen/Qwen-Image（特色图片）已充分测试，稳定可用
+- 🔬 **其他模型**：列表中显示的其他模型理论上可以使用（基于硅基流动API规范），但未经过充分测试
+- ⚠️ **使用前提**：如需切换到未测试模型，请确保该模型在硅基流动平台可用，API接口格式与已测试模型一致
+- 💡 **建议反馈**：如成功使用其他模型，欢迎在GitHub提交Issue分享使用经验
+
+### 重要提示
+- 部分模型在处理长文本进行润色和排版时可能超时或失败，这是模型本身的能力限制
+- 推荐使用 Qwen/Qwen2.5-122B-Instruct 或 Qwen/Qwen3.5-122B-A10B 进行润色和排版操作
 
 ## Token统计
 
@@ -168,6 +189,12 @@ A: 在 `includes/class-ai-content-generator-background.php` 的 `hourly_check_po
 GPL v2 or later
 
 ## 更新日志
+
+### 2.0.5
+- 更新默认模型配置：摘要使用 deepseek-ai/DeepSeek-V3.2，特色图片使用 Qwen/Qwen-Image
+- 在 README 中添加模型兼容性说明，标注已测试模型和未测试但理论可用的模型
+- 更新润色和排版默认模型为 Qwen2.5-122B-Instruct，提升长文本处理能力
+- 说明部分模型在润色和排版时的限制是模型本身的能力问题
 
 ### 2.0.4
 - 修复图片描述功能的网络错误（调用不存在的 WordPress 函数导致 500 错误）
