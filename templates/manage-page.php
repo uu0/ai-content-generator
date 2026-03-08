@@ -11,7 +11,7 @@
                     批量生成摘要
                 </button>
                 <button type="button" class="button ai-cg-bulk-image" data-post-ids="">
-                    批量生成图片
+                    批量生图
                 </button>
                 <button type="button" class="button ai-cg-bulk-polish" data-post-ids="">
                     批量润色
@@ -127,7 +127,7 @@
                                     摘要
                                 </button>
                                 <button type="button" class="button button-small ai-cg-generate-image" data-post-id="<?php echo get_the_ID(); ?>">
-                                    图片
+                                    生图
                                 </button>
                                 <button type="button" class="button button-small ai-cg-generate-image-description" data-post-id="<?php echo get_the_ID(); ?>" title="为图片生成描述并重命名">
                                     描述

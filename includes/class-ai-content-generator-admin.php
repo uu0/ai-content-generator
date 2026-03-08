@@ -371,7 +371,7 @@ class AI_Content_Generator_Admin {
         }
 
         // 检查nonce
-        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'ai_cg_refresh_models')) {
+        if (!isset($_POST['nonce']) || !wp_verify_nonce($_POST['nonce'], 'ai_cg_nonce')) {
             wp_send_json_error(array('message' => '安全验证失败'));
         }
 

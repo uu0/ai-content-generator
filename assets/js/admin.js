@@ -187,7 +187,28 @@
             success: function(response) {
                 hideLoading();
                 if (response.success) {
-                    alert('图片描述生成成功！\n\n处理了 ' + response.data.total + ' 张图片，重命名 ' + response.data.renamed + ' 张。');
+                    // 如果有部分失败，显示详情
+                    if (response.data.renamed < response.data.total && response.data.results) {
+                        var errorCount = response.data.total - response.data.renamed;
+                        var errorMsg = '图片描述生成完成！\n\n处理了 ' + response.data.total + ' 张图片，成功重命名 ' + response.data.renamed + ' 张，失败 ' + errorCount + ' 张。\n\n失败原因：\n';
+
+                        // 显示前3个失败项
+                        var errorItems = response.data.results.filter(function(item) {
+                            return item.status === 'error';
+                        }).slice(0, 3);
+
+                        errorItems.forEach(function(item) {
+                            errorMsg += '- 附件ID ' + item.attachment_id + ': ' + item.message + '\n';
+                        });
+
+                        if (errorCount > 3) {
+                            errorMsg += '... 还有 ' + (errorCount - 3) + ' 个失败项';
+                        }
+
+                        alert(errorMsg);
+                    } else {
+                        alert('图片描述生成成功！\n\n处理了 ' + response.data.total + ' 张图片，重命名 ' + response.data.renamed + ' 张。');
+                    }
                     // 刷新页面
                     location.reload();
                 } else {

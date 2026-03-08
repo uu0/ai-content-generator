@@ -535,9 +535,9 @@ class AI_Content_Generator_API {
         }
 
         // 获取当前路径
-        $old_path = get_attached_file($attachment_id);
+        $old_path = get_attached_file($attachment_id, true);
         if (!file_exists($old_path)) {
-            return new WP_Error('file_not_found', '文件不存在');
+            return new WP_Error('file_not_found', '文件不存在: ' . $old_path);
         }
 
         // 获取文件信息
@@ -566,9 +566,17 @@ class AI_Content_Generator_API {
             $counter++;
         }
 
+        // 检查目录是否可写
+        if (!is_writable($directory)) {
+            return new WP_Error('directory_not_writable', '目录不可写: ' . $directory);
+        }
+
         // 重命名文件
         if (!rename($old_path, $new_path)) {
-            return new WP_Error('rename_failed', '重命名失败');
+            $error = error_get_last();
+            $error_msg = $error ? $error['message'] : '未知错误';
+            error_log('AI Content Generator: 重命名失败 - ' . $error_msg . ' - 从 ' . $old_path . ' 到 ' . $new_path);
+            return new WP_Error('rename_failed', '重命名失败: ' . $error_msg);
         }
 
         // 获取上传目录信息
