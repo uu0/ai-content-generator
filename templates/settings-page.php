@@ -214,6 +214,70 @@
                 </table>
             </div>
 
+            <div class="ai-cg-setting-section">
+                <h2>排除规则</h2>
+                <p class="description">设置哪些文章/页面/分类不参与AI处理。</p>
+                <table class="form-table">
+                    <tr>
+                        <th scope="row">排除分类</th>
+                        <td>
+                            <div style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; background: #fff;">
+                                <?php
+                                $categories = get_categories(array('hide_empty' => false));
+                                $excluded_categories = get_option('ai_cg_excluded_categories', '');
+                                $excluded_category_ids = array_filter(array_map('intval', explode(',', $excluded_categories)));
+
+                                if (!empty($categories)) :
+                                    foreach ($categories as $category) :
+                                        ?>
+                                        <label style="display: block; margin-bottom: 5px;">
+                                            <input type="checkbox" name="ai_cg_excluded_categories[]" value="<?php echo esc_attr($category->term_id); ?>" <?php checked(in_array($category->term_id, $excluded_category_ids)); ?>>
+                                            <?php echo esc_html($category->name); ?> (ID: <?php echo $category->term_id; ?>)
+                                        </label>
+                                    <?php endforeach;
+                                else :
+                                    ?>
+                                    <p style="color: #666;">没有找到分类</p>
+                                <?php endif; ?>
+                            </div>
+                            <p class="description">选中这些分类下的所有文章都不会被AI处理。</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">排除页面</th>
+                        <td>
+                            <div style="max-height: 200px; overflow-y: auto; border: 1px solid #ddd; padding: 10px; background: #fff;">
+                                <?php
+                                $pages = get_pages();
+                                $excluded_pages = get_option('ai_cg_excluded_pages', '');
+                                $excluded_page_ids = array_filter(array_map('intval', explode(',', $excluded_pages)));
+
+                                if (!empty($pages)) :
+                                    foreach ($pages as $page) :
+                                        ?>
+                                        <label style="display: block; margin-bottom: 5px;">
+                                            <input type="checkbox" name="ai_cg_excluded_pages[]" value="<?php echo esc_attr($page->ID); ?>" <?php checked(in_array($page->ID, $excluded_page_ids)); ?>>
+                                            <?php echo esc_html($page->post_title); ?> (ID: <?php echo $page->ID; ?>)
+                                        </label>
+                                    <?php endforeach;
+                                else :
+                                    ?>
+                                    <p style="color: #666;">没有找到页面</p>
+                                <?php endif; ?>
+                            </div>
+                            <p class="description">选中的页面都不会被AI处理。</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">自定义排除文章ID</th>
+                        <td>
+                            <input type="text" name="ai_cg_excluded_posts" value="<?php echo esc_attr(get_option('ai_cg_excluded_posts', '')); ?>" class="regular-text" placeholder="例如: 1, 5, 10">
+                            <p class="description">输入要排除的文章ID，多个ID用逗号分隔。优先级高于分类排除。</p>
+                        </td>
+                    </tr>
+                </table>
+            </div>
+
             <?php submit_button('保存设置'); ?>
         </div>
     </form>

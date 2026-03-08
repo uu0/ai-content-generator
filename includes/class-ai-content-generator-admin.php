@@ -103,6 +103,27 @@ class AI_Content_Generator_Admin {
         register_setting('ai_cg_settings', 'ai_cg_reformat_prompt_standard');
         register_setting('ai_cg_settings', 'ai_cg_reformat_prompt_blog');
         register_setting('ai_cg_settings', 'ai_cg_reformat_prompt_technical');
+
+        // 新增：排除设置（带回调处理数组）
+        register_setting('ai_cg_settings', 'ai_cg_excluded_categories', array(
+            'sanitize_callback' => array($this, 'sanitize_excluded_ids')
+        ));
+        register_setting('ai_cg_settings', 'ai_cg_excluded_pages', array(
+            'sanitize_callback' => array($this, 'sanitize_excluded_ids')
+        ));
+        register_setting('ai_cg_settings', 'ai_cg_excluded_posts');
+    }
+
+    /**
+     * 清理排除ID（将数组转换为逗号分隔的字符串）
+     */
+    public function sanitize_excluded_ids($input) {
+        if (is_array($input)) {
+            // 过滤掉空值和无效值
+            $filtered = array_filter(array_map('intval', $input));
+            return implode(',', $filtered);
+        }
+        return '';
     }
 
     /**

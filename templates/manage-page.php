@@ -69,6 +69,8 @@
                     $has_image = has_post_thumbnail();
                     $summary_generated = get_post_meta(get_the_ID(), '_ai_cg_summary_generated', true);
                     $image_generated = get_post_meta(get_the_ID(), '_ai_cg_image_generated', true);
+                    $api = AI_Content_Generator_API::get_instance();
+                    $is_excluded = $api->is_post_excluded(get_the_ID());
                     ?>
                     <tr data-post-id="<?php echo get_the_ID(); ?>">
                         <td>
@@ -96,6 +98,9 @@
                             <span class="status-<?php echo get_post_status(); ?>">
                                 <?php echo get_post_status_object(get_post_status())->label; ?>
                             </span>
+                            <?php if ($is_excluded) : ?>
+                                <span class="ai-cg-badge ai-cg-badge-danger" style="margin-left: 5px;">已排除</span>
+                            <?php endif; ?>
                         </td>
                         <td>
                             <?php if ($has_summary) : ?>
@@ -148,8 +153,7 @@
                                         撤回
                                     </button>
                                 <?php endif; ?>
-                                <?php $api = AI_Content_Generator_API::get_instance(); ?>
-                                <?php if ($api->is_post_excluded(get_the_ID())) : ?>
+                                <?php if ($is_excluded) : ?>
                                     <button type="button" class="button button-small ai-cg-unexclude" data-post-id="<?php echo get_the_ID(); ?>" title="从排除列表中移除">
                                         取消排除
                                     </button>

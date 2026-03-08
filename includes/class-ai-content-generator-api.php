@@ -352,7 +352,7 @@ class AI_Content_Generator_API {
         }
 
         // 提取文章内容中的所有图片
-        $images = $this->extract_images_from_content($post->post_content);
+        $images = $this->extract_images_from_content($post->post_content, $post_id);
         if (empty($images)) {
             return new WP_Error('no_images', '文章中没有找到图片');
         }
@@ -436,10 +436,39 @@ class AI_Content_Generator_API {
     /**
      * 从HTML内容中提取所有图片
      */
-    private function extract_images_from_content($content) {
+    private function extract_images_from_content($content, $post_id = 0) {
         $images = array();
 
-        // 匹配 <img> 标签
+        // 方法1: 使用 WordPress 的 get_content_attachments 函数
+        global $wpdb;
+        global $post;
+        $backup_post = $post;
+
+        if ($post_id > 0) {
+            $post = get_post($post_id);
+        }
+
+        if (!empty($post)) {
+            $attachments = get_content_attachments();
+            foreach ($attachments as $attachment) {
+                if ($attachment->post_type === 'attachment' && wp_attachment_is('image', $attachment->ID)) {
+                    $attachment_id = $attachment->ID;
+                    if (!isset($images[$attachment_id])) {
+                        $images[$attachment_id] = array(
+                            'attachment_id' => $attachment_id,
+                            'src' => wp_get_attachment_url($attachment_id),
+                            'alt' => get_post_meta($attachment_id, '_wp_attachment_image_alt', true),
+                            'title' => $attachment->post_title
+                        );
+                    }
+                }
+            }
+        }
+
+        // 恢复全局 $post
+        $post = $backup_post;
+
+        // 方法2: 匹配 <img> 标签（作为补充）
         if (preg_match_all('/<img[^>]+>/i', $content, $matches)) {
             foreach ($matches[0] as $img_tag) {
                 // 提取src
@@ -474,7 +503,7 @@ class AI_Content_Generator_API {
             }
         }
 
-        // 匹配 [gallery] shortcode
+        // 方法3: 匹配 [gallery] shortcode
         if (preg_match_all('/\[gallery[^\]]*\]/i', $content, $gallery_matches)) {
             foreach ($gallery_matches[0] as $gallery_shortcode) {
                 if (preg_match('/ids=["\']([^"\']+)["\']/i', $gallery_shortcode, $id_match)) {
@@ -780,10 +809,10 @@ class AI_Content_Generator_API {
     }
 
     /**
-     * 检查文章是否应该被排除
+     * 检查文章/页面是否应该被排除
      */
     public function is_post_excluded($post_id) {
-        // 检查文章ID是否在排除列表中
+        // 检查文章/页面ID是否在排除列表中
         $excluded_posts = get_option('ai_cg_excluded_posts', '');
         $excluded_post_ids = array_filter(array_map('trim', explode(',', $excluded_posts)));
 
@@ -791,15 +820,23 @@ class AI_Content_Generator_API {
             return true;
         }
 
-        // 检查文章分类是否在排除列表中
-        $excluded_categories = get_option('ai_cg_excluded_categories', '');
-        $excluded_category_ids = array_filter(array_map('trim', explode(',', $excluded_categories)));
+        // 获取文章/页面对象
+        $post = get_post($post_id);
+        if (!$post) {
+            return false;
+        }
 
-        if (!empty($excluded_category_ids)) {
-            $post_categories = wp_get_post_categories($post_id);
-            foreach ($post_categories as $cat_id) {
-                if (in_array(strval($cat_id), $excluded_category_ids)) {
-                    return true;
+        // 检查文章分类是否在排除列表中
+        if ($post->post_type === 'post') {
+            $excluded_categories = get_option('ai_cg_excluded_categories', '');
+            $excluded_category_ids = array_filter(array_map('trim', explode(',', $excluded_categories)));
+
+            if (!empty($excluded_category_ids)) {
+                $post_categories = wp_get_post_categories($post_id);
+                foreach ($post_categories as $cat_id) {
+                    if (in_array(strval($cat_id), $excluded_category_ids)) {
+                        return true;
+                    }
                 }
             }
         }
