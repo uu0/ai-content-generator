@@ -23,7 +23,7 @@
 ## 配置步骤
 
 1. **获取API密钥**
-   - 访问[我的推荐链接](https://cloud.siliconflow.cn/i/H7S7dWHo)或者访问 [硅基流动官网](https://platform.siliconflow.cn/)
+   - 访问[我的推荐链接](https://cloud.siliconflow.cn/i/H7S7dWHo)可以获得16元AI代金券，或者访问 [硅基流动官网](https://platform.siliconflow.cn/)
    - 注册并登录账号
    - 在控制台获取API密钥
 
