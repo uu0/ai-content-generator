@@ -211,7 +211,43 @@ class AI_Content_Generator_API {
     }
 
     /**
-     * 从API获取可用模型列表
+     * 模型黑名单 - 这些模型会导致错误或不支持必要功能
+     */
+    private static $model_blacklist = array(
+        // Embedding模型（不支持聊天）
+        'BAAI/bge-*',
+        'deepseek-ai/deepseek-embedding-*',
+        'intfloat/*embedding*',
+        'moka-ai/*embedding*',
+        'BAAI/bge-m3',
+        'BAAI/bge-large-*',
+        'BAAI/bge-base-*',
+        // Rerank模型（用于搜索排序，不支持聊天）
+        'BAAI/bge-reranker-*',
+        // Audio/语音模型
+        'openai/whisper-*',
+        'pyannote/*',
+        // 其他不支持的模型
+        '*', thumbnail*', '*upscale*', '*edit*',
+    );
+
+    /**
+     * 图片模型关键词列表
+     */
+    private static $image_model_keywords = array(
+        'flux', 'stable', 'diffusion', 'sd', 'sdxl',
+        'midjourney', 'dall-e', 'imagen', 'stylegan'
+    );
+
+    /**
+     * 聊天模型关键词列表（用于排除错误的图片模型分类）
+     */
+    private static $chat_model_keywords = array(
+        'chat', 'instruct', 'llm', 'gpt', 'qwen', 'deepseek', 'llama', 'mistral', 'gemma'
+    );
+
+    /**
+     * 从API获取可用模型列表（改进版）
      */
     public function fetch_models_from_api() {
         $api_key = $this->get_api_key();
@@ -231,6 +267,7 @@ class AI_Content_Generator_API {
         ));
 
         if (is_wp_error($response)) {
+            error_log('AI Content Generator: 获取模型列表失败 - ' . $response->get_error_message());
             return $response;
         }
 
@@ -238,10 +275,12 @@ class AI_Content_Generator_API {
         $data = json_decode($body, true);
 
         if (json_last_error() !== JSON_ERROR_NONE) {
-            return new WP_Error('json_decode_error', '无法解析API响应');
+            error_log('AI Content Generator: API响应解析失败 - ' . json_last_error_msg());
+            return new WP_Error('json_decode_error', '无法解析API响应: ' . json_last_error_msg());
         }
 
         if (!isset($data['data'])) {
+            error_log('AI Content Generator: API返回数据格式不正确 - ' . print_r($data, true));
             return new WP_Error('invalid_response', 'API返回数据格式不正确');
         }
 
@@ -249,23 +288,31 @@ class AI_Content_Generator_API {
         $models = $data['data'];
         $chat_models = array();
         $image_models = array();
+        $skipped_models = 0;
 
         foreach ($models as $model) {
             $model_id = $model['id'];
             $display_name = isset($model['display_name']) ? $model['display_name'] : $model_id;
 
-            // 根据 ID 或 display_name 判断模型类型
-            if (strpos(strtolower($model_id), 'flux') !== false ||
-                strpos(strtolower($model_id), 'stable') !== false ||
-                strpos(strtolower($model_id), 'sd') !== false ||
-                strpos(strtolower($display_name), 'flux') !== false ||
-                strpos(strtolower($display_name), 'stable') !== false ||
-                strpos(strtolower($display_name), 'diffusion') !== false) {
+            // 检查是否在黑名单中
+            if ($this->is_model_blacklisted($model_id)) {
+                $skipped_models++;
+                continue;
+            }
+
+            // 改进的模型类型判断
+            $model_type = $this->determine_model_type($model);
+
+            if ($model_type === 'image') {
                 // 图片生成模型
                 $image_models[$model_id] = $display_name;
-            } else {
+            } elseif ($model_type === 'chat') {
                 // 聊天模型
                 $chat_models[$model_id] = $display_name;
+            } else {
+                // 未知类型，默认为聊天模型
+                $chat_models[$model_id] = $display_name;
+                error_log('AI Content Generator: 模型类型未知，归类为聊天 - ' . $model_id);
             }
         }
 
@@ -273,38 +320,137 @@ class AI_Content_Generator_API {
         asort($chat_models);
         asort($image_models);
 
+        error_log('AI Content Generator: 模型列表获取成功 - 聊天模型: ' . count($chat_models) . ', 图片模型: ' . count($image_models) . ', 跳过模型: ' . $skipped_models);
+
         return array(
             'success' => true,
             'chat' => $chat_models,
             'image' => $image_models,
-            'total' => count($chat_models) + count($image_models)
+            'total' => count($chat_models) + count($image_models),
+            'skipped' => $skipped_models
         );
     }
 
     /**
-     * 获取可用模型列表（从缓存或API）
+     * 判断模型是否在黑名单中
      */
-    public function get_available_models($force_refresh = false) {
-        // 如果强制刷新，从API获取
-        if ($force_refresh) {
-            $result = $this->fetch_models_from_api();
-            if (!is_wp_error($result) && isset($result['success'])) {
-                // 缓存结果
-                update_option('ai_cg_available_models', $result['chat'], $result['image']);
-                // 更新时间戳
-                update_option('ai_cg_models_last_update', current_time('timestamp'));
-                return $result;
+    private function is_model_blacklisted($model_id) {
+        $model_id_lower = strtolower($model_id);
+
+        foreach (self::$model_blacklist as $pattern) {
+            $pattern_lower = strtolower($pattern);
+            // 将 * 替换为正则表达式的 .*
+            $regex = str_replace('*', '.*', preg_quote($pattern_lower, '/'));
+
+            if (preg_match('/' . $regex . '/i', $model_id_lower)) {
+                return true;
             }
         }
 
-        // 尝试从缓存获取
-        $cached_models = get_option('ai_cg_available_models', array());
-        if (!empty($cached_models)) {
+        return false;
+    }
+
+    /**
+     * 改进的模型类型判断
+     */
+    private function determine_model_type($model) {
+        $model_id = strtolower($model['id']);
+        $display_name = isset($model['display_name']) ? strtolower($model['display_name']) : '';
+
+        // 步骤1: 检查是否明确是图片模型（通过关键词）
+        foreach (self::$image_model_keywords as $keyword) {
+            if (strpos($model_id, $keyword) !== false || strpos($display_name, $keyword) !== false) {
+                return 'image';
+            }
+        }
+
+        // 步骤2: 检查是否明确是聊天模型（通过关键词）
+        foreach (self::$chat_model_keywords as $keyword) {
+            if (strpos($model_id, $keyword) !== false || strpos($display_name, $keyword) !== false) {
+                return 'chat';
+            }
+        }
+
+        // 步骤3: 使用API返回的capabilities字段（如果存在）
+        if (isset($model['capabilities']) && is_array($model['capabilities'])) {
+            if (in_array('image', $model['capabilities'])) {
+                return 'image';
+            }
+            if (in_array('text', $model['capabilities']) || in_array('chat', $model['capabilities'])) {
+                return 'chat';
+            }
+        }
+
+        // 步骤4: 使用object字段判断（如果存在）
+        if (isset($model['object'])) {
+            if ($model['object'] === 'image-generation') {
+                return 'image';
+            }
+            if ($model['object'] === 'text-generation' || $model['object'] === 'chat') {
+                return 'chat';
+            }
+        }
+
+        // 步骤5: 根据常见命名规则判断
+        // 如果包含 embedding, rerank, audio, whisper 等关键词，跳过
+        $skip_keywords = array('embedding', 'rerank', 'audio', 'whisper', 'tts', 'stt', 'asr');
+        foreach ($skip_keywords as $keyword) {
+            if (strpos($model_id, $keyword) !== false) {
+                return 'skip';
+            }
+        }
+
+        // 默认未知
+        return 'unknown';
+    }
+
+    /**
+     * 获取可用模型列表（从缓存或API） - 修复缓存逻辑
+     */
+    public function get_available_models($force_refresh = false) {
+        $cache_key = 'ai_cg_available_models';
+        $timestamp_key = 'ai_cg_models_last_update';
+
+        // 检查缓存是否存在
+        $cached_models = get_option($cache_key, null);
+        $last_update = get_option($timestamp_key, 0);
+
+        // 缓存过期时间：24小时
+        $cache_expires = 24 * 60 * 60;
+
+        // 判断是否需要刷新
+        $should_refresh = $force_refresh ||
+                         empty($cached_models) ||
+                         (current_time('timestamp') - $last_update > $cache_expires);
+
+        if ($should_refresh) {
+            $result = $this->fetch_models_from_api();
+            if (!is_wp_error($result) && isset($result['success'])) {
+                // 正确存储缓存数据
+                $cache_data = array(
+                    'chat' => $result['chat'],
+                    'image' => $result['image'],
+                    'total' => $result['total'],
+                    'last_updated' => current_time('timestamp')
+                );
+                update_option($cache_key, $cache_data);
+                update_option($timestamp_key, current_time('timestamp'));
+
+                error_log('AI Content Generator: 模型列表已刷新 - 总计: ' . $result['total'] . ' 个模型');
+                return $cache_data;
+            } else {
+                error_log('AI Content Generator: 刷新模型列表失败，使用缓存');
+            }
+        }
+
+        // 返回缓存数据
+        if ($cached_models && is_array($cached_models) && isset($cached_models['chat']) && isset($cached_models['image'])) {
             return $cached_models;
         }
 
-        // 如果没有缓存且不是强制刷新，尝试从API获取
-        return $this->fetch_models_from_api();
+        // 如果所有方法都失败，返回默认模型列表
+        error_log('AI Content Generator: 缓存无效，使用默认模型列表');
+        return $this->get_available_models_legacy();
     }
 
     /**
