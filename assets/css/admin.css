@@ -294,3 +294,61 @@
     color: #d12e2e;
     border-color: #d12e2e;
 }
+
+/* 模态框样式 */
+#ai-cg-reformat-modal,
+#ai-cg-polish-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 999998;
+    display: none;
+}
+
+.ai-cg-modal-content {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: white;
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    min-width: 400px;
+    max-width: 90%;
+}
+
+.ai-cg-modal-content h2 {
+    margin-top: 0;
+    padding-bottom: 15px;
+    border-bottom: 1px solid #eee;
+    font-size: 20px;
+}
+
+.ai-cg-modal-content p {
+    margin-bottom: 20px;
+    color: #666;
+    line-height: 1.6;
+}
+
+.ai-cg-modal-select {
+    width: 100%;
+    padding: 10px;
+    font-size: 14px;
+    margin-bottom: 20px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    background: white;
+}
+
+.ai-cg-modal-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}
+
+.ai-cg-modal-buttons .button {
+    white-space: nowrap;
+}

@@ -707,12 +707,12 @@ class AI_Content_Generator_API {
             return new WP_Error('no_api_key', 'API密钥或模型未配置');
         }
 
-        // 根据风格选择提示词
+        // 根据风格选择提示词（要求返回HTML格式，保留原有结构）
         $style_prompts = array(
-            'formal' => get_option('ai_cg_polish_prompt_formal', '请将以下内容改写为正式、专业的书面语风格，保持原意不变，改写为：\n\n'),
-            'casual' => get_option('ai_cg_polish_prompt_casual', '请将以下内容改写为轻松、友好的口语风格，保持原意不变，改写为：\n\n'),
-            'creative' => get_option('ai_cg_polish_prompt_creative', '请将以下内容改写为富有创意和吸引力的风格，保持原意不变，改写为：\n\n'),
-            'normal' => get_option('ai_cg_polish_prompt_normal', '请对以下内容进行润色，改善表达流畅度和可读性，保持原意不变，润色后为：\n\n')
+            'formal' => get_option('ai_cg_polish_prompt_formal', '请将以下内容改写为正式、专业的书面语风格，保持原意不变，保留原有的HTML结构，并返回WordPress富文本编辑器可识别的HTML格式：\n\n要求：\n1. 保留所有原有的HTML标签结构（如h2、h3、p、ul、ol、li、table、pre、code等）\n2. 只改写文本内容为正式风格，不添加或删除任何标签\n3. 保持标题层级和段落结构\n4. 确保HTML格式正确，可直接在WordPress编辑器中使用\n\n润色后的内容：\n\n'),
+            'casual' => get_option('ai_cg_polish_prompt_casual', '请将以下内容改写为轻松、友好的口语风格，保持原意不变，保留原有的HTML结构，并返回WordPress富文本编辑器可识别的HTML格式：\n\n要求：\n1. 保留所有原有的HTML标签结构（如h2、h3、p、ul、ol、li、blockqoute等）\n2. 只改写文本内容为轻松风格，不添加或删除任何标签\n3. 保持标题层级和段落结构\n4. 确保HTML格式正确，可直接在WordPress编辑器中使用\n\n润色后的内容：\n\n'),
+            'creative' => get_option('ai_cg_polish_prompt_creative', '请将以下内容改写为富有创意和吸引力的风格，保持原意不变，保留原有的HTML结构，并返回WordPress富文本编辑器可识别的HTML格式：\n\n要求：\n1. 保留所有原有的HTML标签结构（如h2、h3、p、ul、ol、li等）\n2. 只改写文本内容为创意风格，不添加或删除任何标签\n3. 保持标题层级和段落结构\n4. 确保HTML格式正确，可直接在WordPress编辑器中使用\n\n润色后的内容：\n\n'),
+            'normal' => get_option('ai_cg_polish_prompt_normal', '请对以下内容进行润色，改善表达流畅度和可读性，保持原意不变，保留原有的HTML结构，并返回WordPress富文本编辑器可识别的HTML格式：\n\n要求：\n1. 保留所有原有的HTML标签结构（如h2、h3、p、ul、ol、li、table、pre、code等）\n2. 只改善文本表达流畅度，不添加或删除任何标签\n3. 保持标题层级和段落结构\n4. 确保HTML格式正确，可直接在WordPress编辑器中使用\n\n润色后的内容：\n\n')
         );
 
         $prompt = isset($style_prompts[$style]) ? $style_prompts[$style] : $style_prompts['normal'];
@@ -734,11 +734,11 @@ class AI_Content_Generator_API {
             return new WP_Error('no_api_key', 'API密钥或模型未配置');
         }
 
-        // 根据格式类型选择提示词
+        // 根据格式类型选择提示词（要求返回HTML格式，不修改文字内容）
         $format_prompts = array(
-            'standard' => get_option('ai_cg_reformat_prompt_standard', '请对以下内容进行排版优化：\n1. 添加 appropriate 的标题和小标题\n2. 合理分段\n3. 使用项目符号和编号列表\n4. 改善阅读体验\n直接返回排版后的内容，不需要解释：\n\n'),
-            'blog' => get_option('ai_cg_reformat_prompt_blog', '请将以下内容排版为博客文章格式：\n1. 添加吸引人的标题\n2. 使用清晰的段落和小标题\n3. 突出重点内容\n4. 优化阅读流\n直接返回排版后的博客内容：\n\n'),
-            'technical' => get_option('ai_cg_reformat_prompt_technical', '请将以下内容排版为技术文档格式：\n1. 添加清晰的章节和子章节\n2. 使用代码块标记\n3. 添加注释说明\n4. 使用层级结构\n直接返回排版后的技术文档：\n\n')
+            'standard' => get_option('ai_cg_reformat_prompt_standard', '请对以下内容进行排版优化，只调整HTML标签和格式，不修改任何文字内容，并返回WordPress富文本编辑器可识别的HTML格式：\n\n重要规则：\n1. 【严禁修改文字内容】保持所有原有文本完全不变\n2. 【标题层级规范】将最大的标题设为<h2>，次级标题设为<h3>，依次降级（h2 > h3 > h4 > h5），不要出现<h1>\n3. 【表格处理】确保表格使用<table>、<thead>、<tbody>、<tr>、<th>、<td>标签\n4. 【代码处理】使用<pre><code>...</code></pre>标签包裹代码块，区分行内代码\n5. 【列表处理】使用<ul>表示无序列表，<ol>表示有序列表，<li>表示列表项\n6. 【标签优化】确保所有标签正确闭合，使用<strong>和<em>进行强调\n7. 【段落处理】使用<p>标签包裹段落文本\n8. 【格式规范】仅使用HTML格式，不使用Markdown\n\n请只调整HTML标签结构，保持所有文字内容完全不变，直接返回排版后的HTML：\n\n'),
+            'blog' => get_option('ai_cg_reformat_prompt_blog', '请将以下内容排版为博客文章格式，只调整HTML标签和格式，不修改任何文字内容，并返回WordPress富文本编辑器可识别的HTML格式：\n\n重要规则：\n1. 【严禁修改文字内容】保持所有原有文本完全不变\n2. 【标题层级规范】文章主标题设为<h2>，次级标题设为<h3>，小标题设为<h4>\n3. 【表格处理】确保表格使用完整的HTML标签\n4. 【代码处理】代码块使用<pre><code>包裹\n5. 【列表处理】使用<ul>和<ol>标签\n6. 【博客特色】使用<blockquote>强调重点内容，保持流畅阅读体验\n7. 【格式规范】仅使用HTML格式，不使用Markdown\n\n请只调整HTML标签结构用于博客，保持所有文字内容完全不变，直接返回排版后的HTML：\n\n'),
+            'technical' => get_option('ai_cg_reformat_prompt_technical', '请将以下内容排版为技术文档格式，只调整HTML标签和格式，不修改任何文字内容，并返回WordPress富文本编辑器可识别的HTML格式：\n\n重要规则：\n1. 【严禁修改文字内容】保持所有原有文本完全不变\n2. 【标题层级规范】章节标题设为<h2>，子章节设为<h3>，小节设为<h4>\n3. 【表格处理】使用标准的<table>结构\n4. 【代码处理】代码块使用<pre><code>...</code></pre>，行内代码使用<code>\n5. 【列表处理】技术要点使用<ul>或<ol>列表清晰展示\n6. 【注释处理】使用<blockquote>添加注释或说明\n7. 【层级结构】严格使用h2->h3->h4层级\n8. 【格式规范】仅使用HTML格式，不使用Markdown\n\n请只调整HTML标签结构用于技术文档，保持所有文字内容完全不变，直接返回排版后的HTML：\n\n')
         );
 
         $prompt = isset($format_prompts[$format_type]) ? $format_prompts[$format_type] : $format_prompts['standard'];
