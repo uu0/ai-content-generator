@@ -571,14 +571,22 @@ class AI_Content_Generator_API {
             return new WP_Error('rename_failed', '重命名失败');
         }
 
-        // 更新数据库中的文件路径
-        update_post_meta($attachment_id, '_wp_attached_file', $new_filename);
+        // 获取上传目录信息
+        $upload_dir = wp_upload_dir();
+        $upload_base_dir = $upload_dir['basedir'];
+
+        // 构建相对路径（WordPress期望的是相对于上传目录的路径）
+        $relative_path = str_replace($upload_base_dir . '/', '', $new_path);
+
+        // 更新数据库中的文件路径（存储相对路径）
+        update_post_meta($attachment_id, '_wp_attached_file', $relative_path);
 
         // 更新媒体库记录
         wp_update_post(array(
             'ID' => $attachment_id,
             'post_title' => $description,
-            'post_name' => sanitize_title($description)
+            'post_name' => sanitize_title($description),
+            'post_content' => $description // 同时更新内容描述
         ));
 
         // 重新生成缩略图（WordPress会自动处理）
