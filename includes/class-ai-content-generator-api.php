@@ -56,10 +56,21 @@ class AI_Content_Generator_API {
         if (!empty($custom_prompt)) {
             // 使用自定义提示词，替换占位符
             $prompt = $custom_prompt;
+
+            // 替换占位符（如果存在）
             if (!empty($post_title)) {
                 $prompt = str_replace('{title}', $post_title, $prompt);
             }
-            $prompt = str_replace('{content}', wp_trim_words($post_content, 500), $prompt);
+            $content_text = wp_trim_words($post_content, 500);
+            $prompt = str_replace('{content}', $content_text, $prompt);
+
+            // 如果自定义提示词中没有 {content} 占位符，自动在末尾追加文章内容
+            if (strpos($custom_prompt, '{content}') === false) {
+                if (!empty($post_title)) {
+                    $prompt .= "\n\n文章标题：{$post_title}";
+                }
+                $prompt .= "\n\n文章内容：\n" . $content_text;
+            }
         } else {
             // 使用默认提示词
             $prompt = "请为以下文章生成一个简洁的摘要（100-200字）：\n\n";
@@ -90,10 +101,24 @@ class AI_Content_Generator_API {
         if (!empty($custom_prompt)) {
             // 使用自定义提示词，替换占位符
             $prompt = $custom_prompt;
+
+            // 替换占位符（如果存在）
             if (!empty($post_title)) {
                 $prompt = str_replace('{title}', $post_title, $prompt);
             }
-            $prompt = str_replace('{content}', wp_trim_words($post_content, 100), $prompt);
+            $content_preview = wp_trim_words($post_content, 100);
+            $prompt = str_replace('{content}', $content_preview, $prompt);
+
+            // 如果自定义提示词中没有 {content} 占位符，自动在末尾追加内容上下文
+            if (strpos($custom_prompt, '{content}') === false) {
+                if (!empty($post_title)) {
+                    // 优先使用标题
+                    $prompt .= " Topic: {$post_title}";
+                } else {
+                    // 其次使用内容预览
+                    $prompt .= " Topic: {$content_preview}";
+                }
+            }
         } else {
             // 使用默认提示词
             // 提取关键信息生成提示词
@@ -117,7 +142,7 @@ class AI_Content_Generator_API {
     /**
      * 调用聊天API
      */
-    private function call_chat_api($model, $prompt) {
+    private function call_chat_api($model, $prompt, $max_tokens = 500, $temperature = 0.7) {
         $api_key = $this->get_api_key();
         $endpoint = 'https://api.siliconflow.cn/v1/chat/completions';
 
@@ -129,8 +154,8 @@ class AI_Content_Generator_API {
                     'content' => $prompt
                 )
             ),
-            'max_tokens' => 500,
-            'temperature' => 0.7
+            'max_tokens' => $max_tokens,
+            'temperature' => $temperature
         );
 
         $response = wp_remote_post($endpoint, array(
@@ -139,7 +164,7 @@ class AI_Content_Generator_API {
                 'Content-Type' => 'application/json'
             ),
             'body' => json_encode($body),
-            'timeout' => 60
+            'timeout' => 120
         ));
 
         if (is_wp_error($response)) {
@@ -158,6 +183,59 @@ class AI_Content_Generator_API {
         $stats->record_token_usage(0, 'generate_summary', $model, $data);
 
         return $data;
+    }
+
+    /**
+     * Markdown转HTML（简化版）
+     */
+    private function markdown_to_html($markdown) {
+        // 如果已经包含HTML标签，直接返回
+        if (preg_match('/<[^>]+>/', $markdown)) {
+            return $markdown;
+        }
+
+        $html = $markdown;
+
+        // 标题转换 (将markdown标题转换为HTML h2-h4，wordpress中h1保留给页面标题)
+        $html = preg_replace('/^####\s+(.+)$/m', '<h4>$1</h4>', $html);
+        $html = preg_replace('/^###\s+(.+)$/m', '<h3>$1</h3>', $html);
+        $html = preg_replace('/^##\s+(.+)$/m', '<h2>$1</h2>', $html);
+        $html = preg_replace('/^#\s+(.+)$/m', '<h2>$1</h2>', $html); // h1转换为h2
+
+        // 代码块转换
+        $html = preg_replace('/```\s*([\s\S]*?)```/', '<pre><code>$1</code></pre>', $html);
+        $html = preg_replace('/`([^`]+)`/', '<code>$1</code>', $html);
+
+        // 加粗和斜体
+        $html = preg_replace('/\*\*\*(.+?)\*\*\*/', '<strong><em>$1</em></strong>', $html);
+        $html = preg_replace('/\*\*(.+?)\*\*/', '<strong>$1</strong>', $html);
+        $html = preg_replace('/\*(.+?)\*/', '<em>$1</em>', $html);
+
+        // 分割线
+        $html = preg_replace('/^-{3,}$/m', '<hr />', $html);
+
+        // 列表转换（无序列表）
+        $html = preg_replace('/^\* (.+)$/m', '<li>$1</li>', $html);
+        $html = preg_replace('/^- (.+)$/m', '<li>$1</li>', $html);
+        $html = preg_replace('/(<li>.*<\/li>)/s', '<ul>$1</ul>', $html);
+
+        // 有序列表
+        $html = preg_replace('/^\d+\. (.+)$/m', '<li>$1</li>', $html);
+
+        // 段落换行
+        $html = preg_replace('/\n\n/', '</p><p>', $html);
+        $html = '<p>' . $html . '</p>';
+
+        // 清理多余的段落标签
+        $html = preg_replace('/<p>\s*<\/p>/', '', $html);
+        $html = preg_replace('/<p>(<ul>)/', '$1', $html);
+        $html = preg_replace('/(<\/ul>)<\/p>/', '$1', $html);
+        $html = preg_replace('/<p>(<h[2-4]>)/', '$1', $html);
+        $html = preg_replace('/(<\/h[2-4]>)<\/p>/', '$1', $html);
+        $html = preg_replace('/<p>(<pre>)/', '$1', $html);
+        $html = preg_replace('/(<\/pre>)<\/p>/', '$1', $html);
+
+        return $html;
     }
 
     /**
@@ -228,7 +306,7 @@ class AI_Content_Generator_API {
         'openai/whisper-*',
         'pyannote/*',
         // 其他不支持的模型
-        '*', thumbnail*', '*upscale*', '*edit*',
+        '*thumbnail*', '*upscale*', '*edit*',
     );
 
     /**
@@ -236,14 +314,17 @@ class AI_Content_Generator_API {
      */
     private static $image_model_keywords = array(
         'flux', 'stable', 'diffusion', 'sd', 'sdxl',
-        'midjourney', 'dall-e', 'imagen', 'stylegan'
+        'midjourney', 'dall-e', 'imagen', 'stylegan',
+        'qwen-image', 'image-edit', 'qwen/image'
     );
 
     /**
      * 聊天模型关键词列表（用于排除错误的图片模型分类）
      */
     private static $chat_model_keywords = array(
-        'chat', 'instruct', 'llm', 'gpt', 'qwen', 'deepseek', 'llama', 'mistral', 'gemma'
+        'chat', 'instruct', 'llm', 'gpt', 'deepseek', 'llama', 'mistral', 'gemma',
+        'glm', 'kimi', 'pro/zai-org', 'pro/moonshotai',
+        'qwen-instruct', 'qwen-chat', 'qwen-plus', 'qwen-turbo', 'qwen-max'
     );
 
     /**
@@ -400,6 +481,16 @@ class AI_Content_Generator_API {
             }
         }
 
+        // 步骤6: 检查是否包含多模态模型的特征
+        // GLM系列、Kimi系列等多模态模型默认归类为聊天模型
+        // 注意：Qwen系列既有聊天模型也有图片模型，不在此处默认归类，已在步骤1和步骤2中精确识别
+        $multimodal_keywords = array('glm', 'kimi', 'deepseek-vl', 'gpt-4-vision', 'claude-3');
+        foreach ($multimodal_keywords as $keyword) {
+            if (strpos($model_id, $keyword) !== false || strpos($display_name, $keyword) !== false) {
+                return 'chat';
+            }
+        }
+
         // 默认未知
         return 'unknown';
     }
@@ -481,436 +572,47 @@ class AI_Content_Generator_API {
     }
 
     /**
-     * 从文章内容提取所有图片ID并生成描述并重命名
-     * 用于特殊页面或有大量图片的文章
-     */
-    public function generate_descriptions_and_rename_images($post_id) {
-        $api_key = $this->get_api_key();
-        $model = get_option('ai_cg_image_description_model', 'deepseek-chat');
-
-        if (empty($api_key) || empty($model)) {
-            return new WP_Error('no_api_key', 'API密钥或模型未配置');
-        }
-
-        $post = get_post($post_id);
-        if (!$post) {
-            return new WP_Error('post_not_found', '文章不存在');
-        }
-
-        // 提取文章内容中的所有图片
-        $images = $this->extract_images_from_content($post->post_content, $post_id);
-        if (empty($images)) {
-            return new WP_Error('no_images', '文章中没有找到图片');
-        }
-
-        $results = array();
-        $renamed_count = 0;
-
-        // 使用提示词模板
-        $prompt_template = get_option('ai_cg_image_description_prompt', '请为这张图片生成一句10字左右的描述：');
-
-        // 为每张图片生成描述
-        foreach ($images as $image) {
-            $attachment_id = $image['attachment_id'];
-            $image_path = get_attached_file($attachment_id);
-
-            if (!$image_path || !file_exists($image_path)) {
-                $results[] = array(
-                    'attachment_id' => $attachment_id,
-                    'status' => 'error',
-                    'message' => '图片文件不存在'
-                );
-                continue;
-            }
-
-            // 尝试从文章内容和上下文生成描述
-            $context = wp_trim_words($post->post_content, 100);
-            if (!empty($image['alt'])) {
-                $context .= ' Alt文本: ' . $image['alt'];
-            }
-            if (!empty($image['title'])) {
-                $context .= ' 标题: ' . $image['title'];
-            }
-
-            // 构建提示词（不使用图片，仅使用上下文信息）
-            $prompt = $prompt_template . "\n\n上下文：" . $context;
-
-            // 调用聊天API生成描述
-            $response = $this->call_chat_api($model, $prompt);
-
-            if (is_wp_error($response)) {
-                $results[] = array(
-                    'attachment_id' => $attachment_id,
-                    'status' => 'error',
-                    'message' => $response->get_error_message()
-                );
-                continue;
-            }
-
-            // 提取描述（限制10字左右）
-            $description = $response['choices'][0]['message']['content'];
-            $description = wp_trim_words($description, 3, ''); // 大约10-15个字
-
-            // 替换文件名
-            $rename_result = $this->rename_image_file($attachment_id, $description);
-            if (is_wp_error($rename_result)) {
-                $results[] = array(
-                    'attachment_id' => $attachment_id,
-                    'status' => 'error',
-                    'message' => '重命名失败: ' . $rename_result->get_error_message()
-                );
-                continue;
-            }
-
-            $results[] = array(
-                'attachment_id' => $attachment_id,
-                'status' => 'success',
-                'description' => $description,
-                'new_filename' => $rename_result
-            );
-            $renamed_count++;
-        }
-
-        return array(
-            'success' => true,
-            'total' => count($images),
-            'renamed' => $renamed_count,
-            'results' => $results
-        );
-    }
-
-    /**
-     * 从HTML内容中提取所有图片
-     */
-    private function extract_images_from_content($content, $post_id = 0) {
-        $images = array();
-
-        // 方法1: 使用 WordPress 的 get_attached_media 函数获取文章附件
-        if ($post_id > 0 && get_post($post_id)) {
-            $attachments = get_attached_media('image', $post_id);
-            foreach ($attachments as $attachment) {
-                $attachment_id = $attachment->ID;
-                if (!isset($images[$attachment_id])) {
-                    $images[$attachment_id] = array(
-                        'attachment_id' => $attachment_id,
-                        'src' => wp_get_attachment_url($attachment_id),
-                        'alt' => get_post_meta($attachment_id, '_wp_attachment_image_alt', true),
-                        'title' => $attachment->post_title
-                    );
-                }
-            }
-        }
-
-        // 方法2: 匹配 <img> 标签（作为补充）
-        if (preg_match_all('/<img[^>]+>/i', $content, $matches)) {
-            foreach ($matches[0] as $img_tag) {
-                // 提取src
-                if (preg_match('/src=["\']([^"\']+)["\']/i', $img_tag, $src_match)) {
-                    $src = $src_match[1];
-                    $attachment_id = $this->get_attachment_id_from_url($src);
-
-                    // 跳过外部图片和已处理的图片
-                    if (!$attachment_id || isset($images[$attachment_id])) {
-                        continue;
-                    }
-
-                    // 提取alt
-                    $alt = '';
-                    if (preg_match('/alt=["\']([^"\']*)["\']/i', $img_tag, $alt_match)) {
-                        $alt = $alt_match[1];
-                    }
-
-                    // 提取title
-                    $title = '';
-                    if (preg_match('/title=["\']([^"\']*)["\']/i', $img_tag, $title_match)) {
-                        $title = $title_match[1];
-                    }
-
-                    $images[$attachment_id] = array(
-                        'attachment_id' => $attachment_id,
-                        'src' => $src,
-                        'alt' => $alt,
-                        'title' => $title
-                    );
-                }
-            }
-        }
-
-        // 方法3: 匹配 [gallery] shortcode
-        if (preg_match_all('/\[gallery[^\]]*\]/i', $content, $gallery_matches)) {
-            foreach ($gallery_matches[0] as $gallery_shortcode) {
-                if (preg_match('/ids=["\']([^"\']+)["\']/i', $gallery_shortcode, $id_match)) {
-                    $ids = explode(',', $id_match[1]);
-                    foreach ($ids as $id) {
-                        $id = trim($id);
-                        if ($id && !isset($images[$id])) {
-                            $images[$id] = array(
-                                'attachment_id' => $id,
-                                'src' => wp_get_attachment_url($id),
-                                'alt' => '',
-                                'title' => ''
-                            );
-                        }
-                    }
-                }
-            }
-        }
-
-        return array_values($images);
-    }
-
-    /**
-     * 从URL获取attachment ID
-     */
-    private function get_attachment_id_from_url($url) {
-        // 去除查询参数
-        $url = strtok($url, '?');
-
-        // 转换为相对路径
-        $upload_dir = wp_upload_dir();
-        $base_url = $upload_dir['baseurl'];
-
-        if (strpos($url, $base_url) === 0) {
-            $relative_path = substr($url, strlen($base_url));
-            $relative_path = ltrim($relative_path, '/');
-
-            // 查找附件
-            global $wpdb;
-            $attachment_id = $wpdb->get_var($wpdb->prepare(
-                "SELECT post_id FROM $wpdb->postmeta WHERE meta_key = '_wp_attached_file' AND meta_value = %s",
-                $relative_path
-            ));
-
-            return $attachment_id ? $attachment_id : false;
-        }
-
-        return false;
-    }
-
-    /**
-     * 重命名图片文件
-     */
-    private function rename_image_file($attachment_id, $description) {
-        $attachment = get_post($attachment_id);
-        if (!$attachment || $attachment->post_type !== 'attachment') {
-            return new WP_Error('invalid_attachment', '无效的附件');
-        }
-
-        // 获取当前路径
-        $old_path = get_attached_file($attachment_id, true);
-        if (!file_exists($old_path)) {
-            return new WP_Error('file_not_found', '文件不存在: ' . $old_path);
-        }
-
-        // 获取文件信息
-        $path_info = pathinfo($old_path);
-        $extension = isset($path_info['extension']) ? '.' . $path_info['extension'] : '';
-
-        // 清理描述字符串（第一轮：只保留中英文、数字和基本标点）
-        $clean_description = preg_replace('/[^a-zA-Z0-9\u4e00-\u9fa5\s\-_]/', '', $description);
-        $clean_description = trim($clean_description);
-        $clean_description = mb_substr($clean_description, 0, 50, 'UTF-8'); // 限制长度
-
-        // 如果清理后仍然为空，尝试更宽松的清理（保留所有中英文和数字字符）
-        if (empty($clean_description)) {
-            error_log('AI Content Generator: 描述清理后为空（第一轮） - 原始描述: "' . $description . '" - 附件ID: ' . $attachment_id);
-            // 第二轮：只移除ASCII特殊字符，保留中英文
-            $clean_description = preg_replace('/[\x00-\x1F\x7F]/', '', $description);
-            $clean_description = preg_replace('/[\/\\\\:*?"<>|]/', '', $clean_description); // 移除文件系统不允许的字符
-            $clean_description = trim($clean_description);
-            $clean_description = mb_substr($clean_description, 0, 50, 'UTF-8');
-
-            error_log('AI Content Generator: 描述清理后为空（第二轮） - 清理后: "' . $clean_description . '"');
-        }
-
-        // 如果仍然为空，使用默认描述
-        if (empty($clean_description)) {
-            error_log('AI Content Generator: 描述完全无效，使用默认描述 - 附件ID: ' . $attachment_id);
-            $clean_description = 'image-' . $attachment_id;
-        }
-
-        // 构建新文件名
-        $directory = $path_info['dirname'];
-        $new_filename = $clean_description . $extension;
-        $new_path = $directory . '/' . $new_filename;
-
-        // 如果文件已存在，添加序号
-        $counter = 1;
-        while (file_exists($new_path)) {
-            $new_filename = $clean_description . '-' . $counter . $extension;
-            $new_path = $directory . '/' . $new_filename;
-            $counter++;
-        }
-
-        // 检查目录是否可写
-        if (!is_writable($directory)) {
-            return new WP_Error('directory_not_writable', '目录不可写: ' . $directory);
-        }
-
-        // 重命名文件
-        if (!rename($old_path, $new_path)) {
-            $error = error_get_last();
-            $error_msg = $error ? $error['message'] : '未知错误';
-            error_log('AI Content Generator: 重命名失败 - ' . $error_msg . ' - 从 ' . $old_path . ' 到 ' . $new_path);
-            return new WP_Error('rename_failed', '重命名失败: ' . $error_msg);
-        }
-
-        // 获取上传目录信息
-        $upload_dir = wp_upload_dir();
-        $upload_base_dir = $upload_dir['basedir'];
-
-        // 构建相对路径（WordPress期望的是相对于上传目录的路径）
-        $relative_path = str_replace($upload_base_dir . '/', '', $new_path);
-
-        // 更新数据库中的文件路径（存储相对路径）
-        update_post_meta($attachment_id, '_wp_attached_file', $relative_path);
-
-        // 更新媒体库记录
-        wp_update_post(array(
-            'ID' => $attachment_id,
-            'post_title' => $description,
-            'post_name' => sanitize_title($description),
-            'post_content' => $description // 同时更新内容描述
-        ));
-
-        // 重新生成缩略图（WordPress会自动处理）
-        $metadata = wp_generate_attachment_metadata($attachment_id, $new_path);
-        wp_update_attachment_metadata($attachment_id, $metadata);
-
-        return $new_filename;
-    }
-
-    /**
-     * 创建图片缩略图
-     */
-    private function get_thumbnail($image_path, $max_width = 1024, $max_height = 1024) {
-        // 检查图片信息
-        $image_info = @getimagesize($image_path);
-        if (!$image_info) {
-            return new WP_Error('invalid_image', '无法读取图片信息');
-        }
-
-        list($width, $height) = $image_info;
-
-        // 如果图片已经足够小，直接返回原路径
-        if ($width <= $max_width && $height <= $max_height) {
-            return $image_path;
-        }
-
-        // 创建缩略图
-        $editor = wp_get_image_editor($image_path);
-        if (is_wp_error($editor)) {
-            return $editor;
-        }
-
-        $editor->resize($max_width, $max_height, false);
-        $thumbnail_path = $editor->generate_filename('-thumb');
-
-        $saved = $editor->save($thumbnail_path);
-        if (is_wp_error($saved)) {
-            return $saved;
-        }
-
-        return $thumbnail_path;
-    }
-
-    /**
-     * 将图片转为base64编码
-     */
-    private function encode_image_to_base64($image_path) {
-        $image_data = file_get_contents($image_path);
-        if ($image_data === false) {
-            return new WP_Error('file_read_error', '无法读取图片文件');
-        }
-
-        $mimetype = mime_content_type($image_path);
-        if (!$mimetype) {
-            return new WP_Error('mime_error', '无法确定图片类型');
-        }
-
-        return 'data:' . $mimetype . ';base64,' . base64_encode($image_data);
-    }
-
-    /**
-     * 调用视觉API（支持图片理解的模型）
-     */
-    private function call_vision_api($model, $prompt, $image_data) {
-        $api_key = $this->get_api_key();
-        $endpoint = 'https://api.siliconflow.cn/v1/chat/completions';
-
-        $body = array(
-            'model' => $model,
-            'messages' => array(
-                array(
-                    'role' => 'user',
-                    'content' => array(
-                        array(
-                            'type' => 'text',
-                            'text' => $prompt
-                        ),
-                        array(
-                            'type' => 'image_url',
-                            'image_url' => array(
-                                'url' => $image_data
-                            )
-                        )
-                    )
-                )
-            ),
-            'max_tokens' => 500,
-            'temperature' => 0.7
-        );
-
-        $response = wp_remote_post($endpoint, array(
-            'headers' => array(
-                'Authorization' => 'Bearer ' . $api_key,
-                'Content-Type' => 'application/json'
-            ),
-            'body' => json_encode($body),
-            'timeout' => 60
-        ));
-
-        if (is_wp_error($response)) {
-            return $response;
-        }
-
-        $body_data = wp_remote_retrieve_body($response);
-        $data = json_decode($body_data, true);
-
-        if (isset($data['error'])) {
-            return new WP_Error('api_error', $data['error']['message']);
-        }
-
-        // 记录Token统计
-        $stats = AI_Content_Generator_Stats::get_instance();
-        $stats->record_token_usage(0, 'generate_image_description', $model, $data);
-
-        return $data;
-    }
-
-    /**
      * AI润色功能
      */
     public function polish_content($content, $style = 'normal') {
         $api_key = $this->get_api_key();
-        $model = get_option('ai_cg_summary_model', 'deepseek-chat');
+        $model = get_option('ai_cg_polish_model', 'deepseek-chat');
 
         if (empty($api_key) || empty($model)) {
-            return new WP_Error('no_api_key', 'API密钥或模型未配置');
+            return new WP_Error('no_api_key', 'API密钥或润色模型未配置');
         }
 
         // 根据风格选择提示词（要求返回HTML格式，保留原有结构）
         $style_prompts = array(
-            'formal' => get_option('ai_cg_polish_prompt_formal', '请将以下内容改写为正式、专业的书面语风格，保持原意不变，保留原有的HTML结构，并返回WordPress富文本编辑器可识别的HTML格式：\n\n要求：\n1. 保留所有原有的HTML标签结构（如h2、h3、p、ul、ol、li、table、pre、code等）\n2. 只改写文本内容为正式风格，不添加或删除任何标签\n3. 保持标题层级和段落结构\n4. 确保HTML格式正确，可直接在WordPress编辑器中使用\n\n润色后的内容：\n\n'),
-            'casual' => get_option('ai_cg_polish_prompt_casual', '请将以下内容改写为轻松、友好的口语风格，保持原意不变，保留原有的HTML结构，并返回WordPress富文本编辑器可识别的HTML格式：\n\n要求：\n1. 保留所有原有的HTML标签结构（如h2、h3、p、ul、ol、li、blockqoute等）\n2. 只改写文本内容为轻松风格，不添加或删除任何标签\n3. 保持标题层级和段落结构\n4. 确保HTML格式正确，可直接在WordPress编辑器中使用\n\n润色后的内容：\n\n'),
-            'creative' => get_option('ai_cg_polish_prompt_creative', '请将以下内容改写为富有创意和吸引力的风格，保持原意不变，保留原有的HTML结构，并返回WordPress富文本编辑器可识别的HTML格式：\n\n要求：\n1. 保留所有原有的HTML标签结构（如h2、h3、p、ul、ol、li等）\n2. 只改写文本内容为创意风格，不添加或删除任何标签\n3. 保持标题层级和段落结构\n4. 确保HTML格式正确，可直接在WordPress编辑器中使用\n\n润色后的内容：\n\n'),
-            'normal' => get_option('ai_cg_polish_prompt_normal', '请对以下内容进行润色，改善表达流畅度和可读性，保持原意不变，保留原有的HTML结构，并返回WordPress富文本编辑器可识别的HTML格式：\n\n要求：\n1. 保留所有原有的HTML标签结构（如h2、h3、p、ul、ol、li、table、pre、code等）\n2. 只改善文本表达流畅度，不添加或删除任何标签\n3. 保持标题层级和段落结构\n4. 确保HTML格式正确，可直接在WordPress编辑器中使用\n\n润色后的内容：\n\n')
+            'formal' => get_option('ai_cg_polish_prompt_formal', '请将以下内容改写为正式、专业的书面语风格，保持原意不变，保留原有的HTML结构，并返回WordPress富文本编辑器可识别的HTML格式。如果内容中包含Markdown格式，请先转换为HTML格式：\n\n重要要求：\n1. 【严禁使用Markdown格式】必须返回纯HTML格式\n2. 保留所有原有的HTML标签结构（如h2、h3、p、ul、ol、li、table、pre、code、strong、em等）\n3. 只改写文本内容为正式风格，不添加或删除任何标签\n4. 保持标题层级和段落结构\n5. 确保HTML格式正确，可直接在WordPress编辑器中使用\n6. 如果检测到Markdown格式（如 **text**, `code`, ## 标题等）必须转换为对应的HTML格式\n\n润色后的内容：\n\n'),
+            'casual' => get_option('ai_cg_polish_prompt_casual', '请将以下内容改写为轻松、友好的口语风格，保持原意不变，保留原有的HTML结构，并返回WordPress富文本编辑器可识别的HTML格式。如果内容中包含Markdown格式，请先转换为HTML格式：\n\n重要要求：\n1. 【严禁使用Markdown格式】必须返回纯HTML格式\n2. 保留所有原有的HTML标签结构（如h2、h3、p、ul、ol、li、blockquote等）\n3. 只改写文本内容为轻松风格，不添加或删除任何标签\n4. 保持标题层级和段落结构\n5. 确保HTML格式正确，可直接在WordPress编辑器中使用\n6. 如果检测到Markdown格式（如 **text**, `code`, ## 标题等）必须转换为对应的HTML格式\n\n润色后的内容：\n\n'),
+            'creative' => get_option('ai_cg_polish_prompt_creative', '请将以下内容改写为富有创意和吸引力的风格，保持原意不变，保留原有的HTML结构，并返回WordPress富文本编辑器可识别的HTML格式。如果内容中包含Markdown格式，请先转换为HTML格式：\n\n重要要求：\n1. 【严禁使用Markdown格式】必须返回纯HTML格式\n2. 保留所有原有的HTML标签结构（如h2、h3、p、ul、ol、li等）\n3. 只改写文本内容为创意风格，不添加或删除任何标签\n4. 保持标题层级和段落结构\n5. 确保HTML格式正确，可直接在WordPress编辑器中使用\n6. 如果检测到Markdown格式（如 **text**, `code`, ## 标题等）必须转换为对应的HTML格式\n\n润色后的内容：\n\n'),
+            'normal' => get_option('ai_cg_polish_prompt_normal', '请对以下内容进行润色，改善表达流畅度和可读性，保持原意不变，保留原有的HTML结构，并返回WordPress富文本编辑器可识别的HTML格式。如果内容中包含Markdown格式，请先转换为HTML格式：\n\n重要要求：\n1. 【严禁使用Markdown格式】必须返回纯HTML格式\n2. 保留所有原有的HTML标签结构（如h2、h3、p、ul、ol、li、table、pre、code、strong、em等）\n3. 只改善文本表达流畅度，不添加或删除任何标签\n4. 保持标题层级和段落结构\n5. 确保HTML格式正确，可直接在WordPress编辑器中使用\n6. 如果检测到Markdown格式（如 **text**, `code`, ## 标题等）必须转换为对应的HTML格式\n\n润色后的内容：\n\n')
         );
 
         $prompt = isset($style_prompts[$style]) ? $style_prompts[$style] : $style_prompts['normal'];
         $prompt .= $content;
 
-        $response = $this->call_chat_api($model, $prompt);
+        // 计算所需的最大token数（内容越长，需要的token越多）
+        $content_length = mb_strlen($content);
+        $max_tokens = max(2000, min(8000, $content_length * 2)); // 根据内容长度动态调整
+
+        $response = $this->call_chat_api($model, $prompt, $max_tokens, 0.7);
+
+        if (is_wp_error($response)) {
+            return $response;
+        }
+
+        // 检查响应并添加markdown转HTML转换
+        if (isset($response['choices'][0]['message']['content'])) {
+            $polished_content = $response['choices'][0]['message']['content'];
+            // 检测是否包含markdown格式，如果是则转换为HTML
+            if ($this->has_markdown_format($polished_content)) {
+                $polished_content = $this->markdown_to_html($polished_content);
+                error_log('AI Content Generator: 检测到Markdown格式，已转换为HTML - polish');
+            }
+            $response['choices'][0]['message']['content'] = $polished_content;
+        }
 
         return $response;
     }
@@ -920,25 +622,70 @@ class AI_Content_Generator_API {
      */
     public function reformat_content($content, $format_type = 'standard') {
         $api_key = $this->get_api_key();
-        $model = get_option('ai_cg_summary_model', 'deepseek-chat');
+        $model = get_option('ai_cg_reformat_model', 'deepseek-chat');
 
         if (empty($api_key) || empty($model)) {
-            return new WP_Error('no_api_key', 'API密钥或模型未配置');
+            return new WP_Error('no_api_key', 'API密钥或排版模型未配置');
         }
 
         // 根据格式类型选择提示词（要求返回HTML格式，不修改文字内容）
         $format_prompts = array(
-            'standard' => get_option('ai_cg_reformat_prompt_standard', '请对以下内容进行排版优化，只调整HTML标签和格式，不修改任何文字内容，并返回WordPress富文本编辑器可识别的HTML格式：\n\n重要规则：\n1. 【严禁修改文字内容】保持所有原有文本完全不变\n2. 【标题层级规范】将最大的标题设为<h2>，次级标题设为<h3>，依次降级（h2 > h3 > h4 > h5），不要出现<h1>\n3. 【表格处理】确保表格使用<table>、<thead>、<tbody>、<tr>、<th>、<td>标签\n4. 【代码处理】使用<pre><code>...</code></pre>标签包裹代码块，区分行内代码\n5. 【列表处理】使用<ul>表示无序列表，<ol>表示有序列表，<li>表示列表项\n6. 【标签优化】确保所有标签正确闭合，使用<strong>和<em>进行强调\n7. 【段落处理】使用<p>标签包裹段落文本\n8. 【格式规范】仅使用HTML格式，不使用Markdown\n\n请只调整HTML标签结构，保持所有文字内容完全不变，直接返回排版后的HTML：\n\n'),
-            'blog' => get_option('ai_cg_reformat_prompt_blog', '请将以下内容排版为博客文章格式，只调整HTML标签和格式，不修改任何文字内容，并返回WordPress富文本编辑器可识别的HTML格式：\n\n重要规则：\n1. 【严禁修改文字内容】保持所有原有文本完全不变\n2. 【标题层级规范】文章主标题设为<h2>，次级标题设为<h3>，小标题设为<h4>\n3. 【表格处理】确保表格使用完整的HTML标签\n4. 【代码处理】代码块使用<pre><code>包裹\n5. 【列表处理】使用<ul>和<ol>标签\n6. 【博客特色】使用<blockquote>强调重点内容，保持流畅阅读体验\n7. 【格式规范】仅使用HTML格式，不使用Markdown\n\n请只调整HTML标签结构用于博客，保持所有文字内容完全不变，直接返回排版后的HTML：\n\n'),
-            'technical' => get_option('ai_cg_reformat_prompt_technical', '请将以下内容排版为技术文档格式，只调整HTML标签和格式，不修改任何文字内容，并返回WordPress富文本编辑器可识别的HTML格式：\n\n重要规则：\n1. 【严禁修改文字内容】保持所有原有文本完全不变\n2. 【标题层级规范】章节标题设为<h2>，子章节设为<h3>，小节设为<h4>\n3. 【表格处理】使用标准的<table>结构\n4. 【代码处理】代码块使用<pre><code>...</code></pre>，行内代码使用<code>\n5. 【列表处理】技术要点使用<ul>或<ol>列表清晰展示\n6. 【注释处理】使用<blockquote>添加注释或说明\n7. 【层级结构】严格使用h2->h3->h4层级\n8. 【格式规范】仅使用HTML格式，不使用Markdown\n\n请只调整HTML标签结构用于技术文档，保持所有文字内容完全不变，直接返回排版后的HTML：\n\n')
+            'standard' => get_option('ai_cg_reformat_prompt_standard', '请对以下内容进行排版优化，只调整HTML标签和格式，不修改任何文字内容，并返回WordPress富文本编辑器可识别的HTML格式。如果内容中包含Markdown格式，请转换为HTML格式：\n\n重要规则：\n1. 【严禁修改文字内容】保持所有原有文本完全不变\n2. 【严禁使用Markdown格式】必须返回纯HTML格式\n3. 【标题层级规范】将最大的标题设为<h2>，次级标题设为<h3>，依次降级（h2 > h3 > h4 > h5），不要出现<h1>\n4. 【表格处理】确保表格使用<table>、<thead>、<tbody>、<tr>、<th>、<td>标签\n5. 【代码处理】使用<pre><code>...</code></pre>标签包裹代码块，行内代码使用<code>\n6. 【列表处理】使用<ul>表示无序列表，<ol>表示有序列表，<li>表示列表项\n7. 【标签优化】确保所有标签正确闭合，使用<strong>和<em>进行强调\n8. 【段落处理】使用<p>标签包裹段落文本\n9. 如果检测到Markdown格式（如 **text**, `code`, ## 标题, - 列表等）必须转换为对应的HTML格式\n\n请只调整HTML标签结构，保持所有文字内容完全不变，直接返回排版后的HTML：\n\n'),
+            'blog' => get_option('ai_cg_reformat_prompt_blog', '请将以下内容排版为博客文章格式，只调整HTML标签和格式，不修改任何文字内容，并返回WordPress富文本编辑器可识别的HTML格式。如果内容中包含Markdown格式，请转换为HTML格式：\n\n重要规则：\n1. 【严禁修改文字内容】保持所有原有文本完全不变\n2. 【严禁使用Markdown格式】必须返回纯HTML格式\n3. 【标题层级规范】文章主标题设为<h2>，次级标题设为<h3>，小标题设为<h4>\n4. 【表格处理】确保表格使用完整的HTML标签\n5. 【代码处理】代码块使用<pre><code>包裹\n6. 【列表处理】使用<ul>和<ol>标签\n7. 【博客特色】使用<blockquote>强调重点内容，保持流畅阅读体验\n8. 如果检测到Markdown格式（如 **text**, `code`, ## 标题, - 列表等）必须转换为对应的HTML格式\n\n请只调整HTML标签结构用于博客，保持所有文字内容完全不变，直接返回排版后的HTML：\n\n'),
+            'technical' => get_option('ai_cg_reformat_prompt_technical', '请将以下内容排版为技术文档格式，只调整HTML标签和格式，不修改任何文字内容，并返回WordPress富文本编辑器可识别的HTML格式。如果内容中包含Markdown格式，请转换为HTML格式：\n\n重要规则：\n1. 【严禁修改文字内容】保持所有原有文本完全不变\n2. 【严禁使用Markdown格式】必须返回纯HTML格式\n3. 【标题层级规范】章节标题设为<h2>，子章节设为<h3>，小节设为<h4>\n4. 【表格处理】使用标准的<table>结构\n5. 【代码处理】代码块使用<pre><code>...</code></pre>，行内代码使用<code>\n6. 【列表处理】技术要点使用<ul>或<ol>列表清晰展示\n7. 【注释处理】使用<blockquote>添加注释或说明\n8. 【层级结构】严格使用h2->h3->h4层级\n9. 如果检测到Markdown格式（如 **text**, `code`, ## 标题, - 列表等）必须转换为对应的HTML格式\n\n请只调整HTML标签结构用于技术文档，保持所有文字内容完全不变，直接返回排版后的HTML：\n\n')
         );
 
         $prompt = isset($format_prompts[$format_type]) ? $format_prompts[$format_type] : $format_prompts['standard'];
         $prompt .= $content;
 
-        $response = $this->call_chat_api($model, $prompt);
+        // 计算所需的最大token数
+        $content_length = mb_strlen($content);
+        $max_tokens = max(2000, min(8000, $content_length * 2));
+
+        $response = $this->call_chat_api($model, $prompt, $max_tokens, 0.3); // 降低temperature以保持更严格的格式
+
+        if (is_wp_error($response)) {
+            return $response;
+        }
+
+        // 检查响应并添加markdown转HTML转换
+        if (isset($response['choices'][0]['message']['content'])) {
+            $formatted_content = $response['choices'][0]['message']['content'];
+            // 检测是否包含markdown格式，如果是则转换为HTML
+            if ($this->has_markdown_format($formatted_content)) {
+                $formatted_content = $this->markdown_to_html($formatted_content);
+                error_log('AI Content Generator: 检测到Markdown格式，已转换为HTML - reformat');
+            }
+            $response['choices'][0]['message']['content'] = $formatted_content;
+        }
 
         return $response;
+    }
+
+    /**
+     * 检测内容是否包含Markdown格式
+     */
+    private function has_markdown_format($content) {
+        // 检查常见的Markdown标记
+        $markdown_patterns = array(
+            '/^#+\s+/',  // 标题（# 或 ## 或 ### 等）
+            '/\*\*[^*]+\*\*/',  // 加粗
+            '/`[^`]+`/',  // 行内代码
+            '/```\s*[\s\S]*?```/',  // 代码块
+            '/^\*[^*]+[^\s]/m',  // 无序列表（* 符号）
+            '/^-[^-]+[^\s]/m',  // 无序列表（- 符号）
+            '/^\d+\.\s+/m',  // 有序列表
+            '/\[([^\]]+)\]\(([^)]+)\)/',  // 链接
+            '/!\[([^\]]*)\]\(([^)]+)\)/',  // 图片
+        );
+
+        foreach ($markdown_patterns as $pattern) {
+            if (preg_match($pattern, $content)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

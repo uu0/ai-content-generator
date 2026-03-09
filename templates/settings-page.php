@@ -14,7 +14,7 @@
                         <td>
                             <input type="password" name="ai_cg_api_key" value="<?php echo esc_attr(get_option('ai_cg_api_key')); ?>" class="regular-text">
                             <p class="description">
-                                请输入您的硅基流动API密钥。访问 <a href="https://platform.siliconflow.cn/" target="_blank">https://platform.siliconflow.cn/</a> 获取API密钥。
+                                请输入您的硅基流动API密钥。<a href="https://cloud.siliconflow.cn/i/H7S7dWHo" target="_blank">访问我的推荐链接获取初始额度</a> 或者 <a href="https://cloud.siliconflow.cn/" target="_blank">访问官网</a> 获取API密钥。
                             </p>
                         </td>
                     </tr>
@@ -68,6 +68,18 @@
                     <span id="ai-cg-models-status" style="margin-left: 10px; font-size: 13px;"></span>
                 </h2>
 
+                <div class="notice notice-warning inline" style="margin: 15px 0; padding: 12px; background-color: #fff3cd; border-left: 4px solid #ffc107;">
+                    <p><strong>⚠️ 重要提示：</strong></p>
+                    <ul style="margin: 8px 0 8px 20px;">
+                        <li>请前往 <a href="https://cloud.siliconflow.cn/i/H7S7dWHo" target="_blank" style="color: #d63638; text-decoration: underline;">硅基流动平台</a> 核对模型的具体能力和用途后再选择使用</li>
+                        <li>不同模型支持的功能不同（如：文本生成、图片生成、图片编辑等），请仔细区分</li>
+                        <li>选择错误的模型可能导致功能异常或API调用失败</li>
+                    </ul>
+                    <p style="margin-top: 8px; font-size: 13px;">
+                        <strong>如遇到设置错误导致无法挽回的问题，请使用 ai-content-generator-database-fix 插件进行修复。</strong>
+                    </p>
+                </div>
+
                 <table class="form-table">
                     <tr>
                         <th scope="row">摘要生成模型</th>
@@ -76,7 +88,7 @@
                                 <?php
                                 $api = AI_Content_Generator_API::get_instance();
                                 $models = $api->get_available_models();
-                                $selected_model = get_option('ai_cg_summary_model', 'deepseek-chat');
+                                $selected_model = get_option('ai_cg_summary_model', 'deepseek-ai/DeepSeek-V3');
 
                                 foreach ($models['chat'] as $model_key => $model_name) :
                                     ?>
@@ -85,7 +97,7 @@
                                     </option>
                                 <?php endforeach; ?>
                             </select>
-                            <p class="description">选择用于生成文章摘要的AI模型。共 <strong id="ai-cg-chat-models-count"><?php echo count($models['chat']); ?></strong> 个可用模型。</p>
+                            <p class="description">选择用于生成文章摘要的AI模型（必须是文本/对话模型）。共 <strong id="ai-cg-chat-models-count"><?php echo count($models['chat']); ?></strong> 个可用模型。</p>
                         </td>
                     </tr>
                     <tr>
@@ -93,7 +105,7 @@
                         <td>
                             <select name="ai_cg_image_model" id="ai-cg-image-model" class="regular-text">
                                 <?php
-                                $selected_model = get_option('ai_cg_image_model', 'stable-diffusion-3');
+                                $selected_model = get_option('ai_cg_image_model', 'Qwen/Qwen2-VL-7B-Instruct');
 
                                 foreach ($models['image'] as $model_key => $model_name) :
                                     ?>
@@ -102,15 +114,15 @@
                                     </option>
                                 <?php endforeach; ?>
                             </select>
-                            <p class="description">选择用于生成特色图片的AI模型。共 <strong id="ai-cg-image-models-count"><?php echo count($models['image']); ?></strong> 个可用模型。</p>
+                            <p class="description">选择用于生成特色图片的AI模型（必须是图片生成模型）。共 <strong id="ai-cg-image-models-count"><?php echo count($models['image']); ?></strong> 个可用模型。</p>
                         </td>
                     </tr>
                     <tr>
-                        <th scope="row">图片描述模型</th>
+                        <th scope="row">润色功能模型</th>
                         <td>
-                            <select name="ai_cg_image_description_model" id="ai-cg-image-description-model" class="regular-text">
+                            <select name="ai_cg_polish_model" id="ai-cg-polish-model" class="regular-text">
                                 <?php
-                                $selected_model = get_option('ai_cg_image_description_model', 'deepseek-chat');
+                                $selected_model = get_option('ai_cg_polish_model', 'Qwen/Qwen2.5-122B-Instruct');
 
                                 foreach ($models['chat'] as $model_key => $model_name) :
                                     ?>
@@ -119,7 +131,24 @@
                                     </option>
                                 <?php endforeach; ?>
                             </select>
-                            <p class="description">选择用于生成图片描述的AI模型。根据文章内容为每张图片生成10字左右描述并重命名文件。</p>
+                            <p class="description">选择用于文章润色的AI模型（必须是文本/对话模型）。支持标准润色、正式风格、轻松风格、创意风格四种模式。</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">排版功能模型</th>
+                        <td>
+                            <select name="ai_cg_reformat_model" id="ai-cg-reformat-model" class="regular-text">
+                                <?php
+                                $selected_model = get_option('ai_cg_reformat_model', 'Qwen/Qwen2.5-122B-Instruct');
+
+                                foreach ($models['chat'] as $model_key => $model_name) :
+                                    ?>
+                                    <option value="<?php echo esc_attr($model_key); ?>" <?php selected($selected_model, $model_key); ?>>
+                                        <?php echo esc_html($model_name); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <p class="description">选择用于文章排版的AI模型（必须是文本/对话模型）。支持标准排版、博客格式、技术文档格式三种模式。</p>
                         </td>
                     </tr>
                 </table>
@@ -128,26 +157,30 @@
             <div class="ai-cg-setting-section">
                 <h2>提示词模板</h2>
                 <p class="description">自定义AI生成的提示词，让生成结果更符合您的需求。支持使用 <code>{title}</code> 和 <code>{content}</code> 占位符。</p>
+
+                <div class="notice notice-info inline" style="margin: 15px 0; padding: 12px; background-color: #d1e7dd; border-left: 4px solid #0f5132;">
+                    <p><strong>💡 重要提示：</strong></p>
+                    <ul style="margin: 8px 0 8px 20px;">
+                        <li><strong>文章内容自动提供</strong>：无论是否包含占位符，AI 都会自动读取到文章标题和内容</li>
+                        <li><strong>{title}</strong>：会被替换为文章标题（推荐包含）</li>
+                        <li><strong>{content}</strong>：会被替换为文章内容（摘要生成500字，图片生成100字）</li>
+                        <li><strong>示例：</strong><code>请用中文总结这篇文章的核心观点：{content}</code></li>
+                    </ul>
+                </div>
+
                 <table class="form-table">
                     <tr>
                         <th scope="row">摘要生成提示词</th>
                         <td>
-                            <textarea name="ai_cg_summary_prompt" rows="3" class="large-text" placeholder="留空使用默认提示词"><?php echo esc_textarea(get_option('ai_cg_summary_prompt', '')); ?></textarea>
-                            <p class="description">自定义文章摘要生成的提示词。默认：请为文章生成100-200字的简洁摘要。</p>
+                            <textarea name="ai_cg_summary_prompt" rows="3" class="large-text" placeholder="留空使用默认提示词，例如：请总结这篇文章的核心观点：{content}"><?php echo esc_textarea(get_option('ai_cg_summary_prompt', '')); ?></textarea>
+                            <p class="description">自定义文章摘要生成的提示词。文章内容会自动提供给AI，无需重复添加。<br>默认：请为文章生成100-200字的简洁摘要。</p>
                         </td>
                     </tr>
                     <tr>
                         <th scope="row">图片生成提示词模板</th>
                         <td>
-                            <textarea name="ai_cg_image_prompt" rows="3" class="large-text" placeholder="留空使用默认提示词"><?php echo esc_textarea(get_option('ai_cg_image_prompt', '')); ?></textarea>
-                            <p class="description">自定义特色图片生成的提示词模板。默认：简约、专业、现代风格。</p>
-                        </td>
-                    </tr>
-                    <tr>
-                        <th scope="row">图片描述生成提示词</th>
-                        <td>
-                            <textarea name="ai_cg_image_description_prompt" rows="3" class="large-text" placeholder="留空使用默认提示词"><?php echo esc_textarea(get_option('ai_cg_image_description_prompt', '')); ?></textarea>
-                            <p class="description">自定义图片描述生成的提示词。默认：请详细描述图片内容。</p>
+                            <textarea name="ai_cg_image_prompt" rows="3" class="large-text" placeholder="留空使用默认提示词，例如：生成一张表示 {title} 主题的图片，风格现代简约"><?php echo esc_textarea(get_option('ai_cg_image_prompt', '')); ?></textarea>
+                            <p class="description">自定义特色图片生成的提示词模板。文章信息会自动提供给AI。<br>默认：简约、专业、现代风格。</p>
                         </td>
                     </tr>
                 </table>
