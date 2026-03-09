@@ -467,20 +467,8 @@ class AI_Content_Generator_Admin {
             return;
         }
 
-        // 使用自定义提示词或默认提示词
-        $custom_prompt = get_option('ai_cg_summary_prompt', '');
-        if (!empty($custom_prompt)) {
-            // 如果有自定义提示词，需要使用特殊的方法
-            $prompt = $custom_prompt;
-            $content = $post->post_content;
-            if (!empty($post->post_title)) {
-                $prompt = str_replace('{title}', $post->post_title, $prompt);
-            }
-            $prompt = str_replace('{content}', wp_trim_words($content, 500), $prompt);
-            $response = $api->generate_summary($content, $post->post_title);
-        } else {
-            $response = $api->generate_summary($post->post_content, $post->post_title);
-        }
+        // 使用自定义提示词或默认提示词（API层已处理）
+        $response = $api->generate_summary($post->post_content, $post->post_title);
 
         if (is_wp_error($response)) {
             wp_send_json_error($response->get_error_message());
