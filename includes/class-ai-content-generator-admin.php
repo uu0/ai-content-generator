@@ -37,12 +37,13 @@ class AI_Content_Generator_Admin {
         add_action('wp_ajax_ai_cg_refresh_models', array($this, 'refresh_models_ajax'));
         add_action('wp_ajax_ai_cg_generate_summary', array($this, 'generate_summary_ajax'));
         add_action('wp_ajax_ai_cg_generate_image', array($this, 'generate_image_ajax'));
-        add_action('wp_ajax_ai_cg_generate_image_description', array($this, 'generate_image_description_ajax'));
         add_action('wp_ajax_ai_cg_polish_content', array($this, 'polish_content_ajax'));
         add_action('wp_ajax_ai_cg_reformat_content', array($this, 'reformat_content_ajax'));
-        add_action('wp_ajax_ai_cg_polish_content', array($this, 'polish_content_ajax'));
         add_action('wp_ajax_ai_cg_preview_operation', array($this, 'preview_operation_ajax'));
         add_action('wp_ajax_ai_cg_undo_operation', array($this, 'undo_operation_ajax'));
+        add_action('wp_ajax_ai_cg_undo_polish', array($this, 'undo_polish_ajax'));
+        add_action('wp_ajax_ai_cg_undo_reformat', array($this, 'undo_reformat_ajax'));
+        add_action('wp_ajax_ai_cg_confirm_operation', array($this, 'confirm_operation_ajax'));
         add_action('wp_ajax_ai_cg_batch_exclude', array($this, 'batch_exclude_ajax'));
         add_action('wp_ajax_ai_cg_remove_from_excluded', array($this, 'remove_from_excluded_ajax'));
     }
@@ -89,13 +90,13 @@ class AI_Content_Generator_Admin {
         register_setting('ai_cg_settings', 'ai_cg_featured_image_enabled');
         register_setting('ai_cg_settings', 'ai_cg_summary_model');
         register_setting('ai_cg_settings', 'ai_cg_image_model');
-        register_setting('ai_cg_settings', 'ai_cg_image_description_model');
+        register_setting('ai_cg_settings', 'ai_cg_polish_model');
+        register_setting('ai_cg_settings', 'ai_cg_reformat_model');
         register_setting('ai_cg_settings', 'ai_cg_auto_check_enabled');
 
         // 新增：自定义提示词
         register_setting('ai_cg_settings', 'ai_cg_summary_prompt');
         register_setting('ai_cg_settings', 'ai_cg_image_prompt');
-        register_setting('ai_cg_settings', 'ai_cg_image_description_prompt');
         register_setting('ai_cg_settings', 'ai_cg_polish_prompt_normal');
         register_setting('ai_cg_settings', 'ai_cg_polish_prompt_formal');
         register_setting('ai_cg_settings', 'ai_cg_polish_prompt_casual');
@@ -558,47 +559,6 @@ class AI_Content_Generator_Admin {
     }
 
     /**
-     * AJAX: 生成图片描述
-     */
-    public function generate_image_description_ajax() {
-        check_ajax_referer('ai_cg_nonce', 'nonce');
-
-        if (!current_user_can('manage_options')) {
-            wp_send_json_error('权限不足');
-            return;
-        }
-
-        $post_id = isset($_POST['post_id']) ? intval($_POST['post_id']) : 0;
-
-        if (!$post_id) {
-            wp_send_json_error('文章ID无效');
-            return;
-        }
-
-        $api = AI_Content_Generator_API::get_instance();
-
-        // 检查是否被排除
-        if ($api->is_post_excluded($post_id)) {
-            wp_send_json_error('这篇文章已被排除');
-            return;
-        }
-
-        // 调用新的图片描述和重命名方法
-        $response = $api->generate_descriptions_and_rename_images($post_id);
-
-        if (is_wp_error($response)) {
-            wp_send_json_error($response->get_error_message());
-            return;
-        }
-
-        // 记录处理时间
-        update_post_meta($post_id, '_ai_cg_image_description_generated', current_time('mysql'));
-        update_post_meta($post_id, '_ai_cg_image_description_count', $response['renamed']);
-
-        wp_send_json_success($response);
-    }
-
-    /**
      * AJAX: AI润色
      */
     public function polish_content_ajax() {
@@ -640,11 +600,8 @@ class AI_Content_Generator_Admin {
 
         $polished_content = $response['choices'][0]['message']['content'];
 
-        // 保存原始内容以便撤回
-        $original_content = $post->post_content;
-        update_post_meta($post_id, '_ai_cg_original_content', $original_content);
-        update_post_meta($post_id, '_ai_cg_operation_type', 'polish');
-        update_post_meta($post_id, '_ai_cg_operation_timestamp', current_time('timestamp'));
+        // 保存到操作栈（先入后出）
+        $this->push_operation_stack($post_id, 'polish', $post->post_content, $post->post_content, $polished_content, $style);
 
         // 更新文章内容
         wp_update_post(array(
@@ -656,7 +613,7 @@ class AI_Content_Generator_Admin {
         update_post_meta($post_id, '_ai_cg_polished_at', current_time('mysql'));
         update_post_meta($post_id, '_ai_cg_polish_style', $style);
 
-        wp_send_json_success(array('content' => $polished_content));
+        wp_send_json_success(array('content' => $polished_content, 'has_undo' => true));
     }
 
     /**
@@ -701,11 +658,8 @@ class AI_Content_Generator_Admin {
 
         $formatted_content = $response['choices'][0]['message']['content'];
 
-        // 保存原始内容以便撤回
-        $original_content = $post->post_content;
-        update_post_meta($post_id, '_ai_cg_original_content', $original_content);
-        update_post_meta($post_id, '_ai_cg_operation_type', 'reformat');
-        update_post_meta($post_id, '_ai_cg_operation_timestamp', current_time('timestamp'));
+        // 保存到操作栈（先入后出）
+        $this->push_operation_stack($post_id, 'reformat', $post->post_content, $post->post_content, $formatted_content, $format_type);
 
         // 更新文章内容
         wp_update_post(array(
@@ -717,7 +671,7 @@ class AI_Content_Generator_Admin {
         update_post_meta($post_id, '_ai_cg_reformatted_at', current_time('mysql'));
         update_post_meta($post_id, '_ai_cg_reformat_type', $format_type);
 
-        wp_send_json_success(array('content' => $formatted_content, 'can_undo' => true));
+        wp_send_json_success(array('content' => $formatted_content, 'has_undo' => true));
     }
 
     /**
@@ -828,6 +782,224 @@ class AI_Content_Generator_Admin {
         delete_post_meta($post_id, '_ai_cg_reformat_type');
 
         wp_send_json_success(array('content' => $original_content));
+    }
+
+    /**
+     * AJAX: 撤回润色操作（单独按钮）
+     */
+    public function undo_polish_ajax() {
+        check_ajax_referer('ai_cg_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('权限不足');
+            return;
+        }
+
+        $post_id = isset($_POST['post_id']) ? intval($_POST['post_id']) : 0;
+
+        if (!$post_id) {
+            wp_send_json_error('文章ID无效');
+            return;
+        }
+
+        $post = get_post($post_id);
+        if (!$post) {
+            wp_send_json_error('文章不存在');
+            return;
+        }
+
+        // 从操作栈弹出最近的一个操作
+        $operation = $this->pop_operation_stack($post_id);
+
+        if (!$operation || $operation['type'] !== 'polish') {
+            wp_send_json_error('没有可撤回的润色操作');
+            return;
+        }
+
+        // 恢复原内容
+        wp_update_post(array(
+            'ID' => $post_id,
+            'post_content' => $operation['before_content']
+        ));
+
+        // 清除润色标记
+        delete_post_meta($post_id, '_ai_cg_polished_at');
+        delete_post_meta($post_id, '_ai_cg_polish_style');
+
+        wp_send_json_success(array('content' => $operation['before_content'], 'remaining' => $this->get_operation_stack_size($post_id)));
+    }
+
+    /**
+     * AJAX: 撤回排版操作（单独按钮）
+     */
+    public function undo_reformat_ajax() {
+        check_ajax_referer('ai_cg_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('权限不足');
+            return;
+        }
+
+        $post_id = isset($_POST['post_id']) ? intval($_POST['post_id']) : 0;
+
+        if (!$post_id) {
+            wp_send_json_error('文章ID无效');
+            return;
+        }
+
+        $post = get_post($post_id);
+        if (!$post) {
+            wp_send_json_error('文章不存在');
+            return;
+        }
+
+        // 从操作栈弹出最近的一个操作
+        $operation = $this->pop_operation_stack($post_id);
+
+        if (!$operation || $operation['type'] !== 'reformat') {
+            wp_send_json_error('没有可撤回的排版操作');
+            return;
+        }
+
+        // 恢复原内容
+        wp_update_post(array(
+            'ID' => $post_id,
+            'post_content' => $operation['before_content']
+        ));
+
+        // 清除排版标记
+        delete_post_meta($post_id, '_ai_cg_reformatted_at');
+        delete_post_meta($post_id, '_ai_cg_reformat_type');
+
+        wp_send_json_success(array('content' => $operation['before_content'], 'remaining' => $this->get_operation_stack_size($post_id)));
+    }
+
+    /**
+     * AJAX: 确认操作（清除撤回按钮）
+     */
+    public function confirm_operation_ajax() {
+        check_ajax_referer('ai_cg_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('权限不足');
+            return;
+        }
+
+        $post_id = isset($_POST['post_id']) ? intval($_POST['post_id']) : 0;
+        $operation_type = isset($_POST['operation_type']) ? sanitize_text_field($_POST['operation_type']) : '';
+
+        if (!$post_id || !$operation_type) {
+            wp_send_json_error('参数无效');
+            return;
+        }
+
+        // 清除操作栈中指定类型的所有操作
+        $this->clear_operation_stack_by_type($post_id, $operation_type);
+
+        wp_send_json_success(array('message' => '操作已确认，撤回按钮已清除'));
+    }
+
+    /**
+     * 将操作推入栈
+     */
+    private function push_operation_stack($post_id, $type, $original_content, $before_content, $after_content, $param) {
+        $stack_key = '_ai_cg_operation_stack';
+        $stack = get_post_meta($post_id, $stack_key, true);
+
+        if (!is_array($stack)) {
+            $stack = array();
+        }
+
+        // 限制栈大小为10
+        if (count($stack) >= 10) {
+            array_shift($stack); // 移除最旧的操作
+        }
+
+        $operation = array(
+            'type' => $type,
+            'original_content' => $original_content,
+            'before_content' => $before_content,
+            'after_content' => $after_content,
+            'param' => $param,
+            'timestamp' => current_time('mysql')
+        );
+
+        array_push($stack, $operation);
+        update_post_meta($post_id, $stack_key, $stack);
+
+        // 也保存原始内容到旧字段（向后兼容）
+        update_post_meta($post_id, '_ai_cg_original_content', $original_content);
+        update_post_meta($post_id, '_ai_cg_operation_type', $type);
+        update_post_meta($post_id, '_ai_cg_operation_timestamp', current_time('timestamp'));
+    }
+
+    /**
+     * 从栈中弹出操作
+     */
+    private function pop_operation_stack($post_id) {
+        $stack_key = '_ai_cg_operation_stack';
+        $stack = get_post_meta($post_id, $stack_key, true);
+
+        if (!is_array($stack) || empty($stack)) {
+            return null;
+        }
+
+        $operation = array_pop($stack);
+        update_post_meta($post_id, $stack_key, $stack);
+
+        // 如果栈为空，清除旧字段
+        if (empty($stack)) {
+            delete_post_meta($post_id, $stack_key);
+            delete_post_meta($post_id, '_ai_cg_original_content');
+            delete_post_meta($post_id, '_ai_cg_operation_type');
+            delete_post_meta($post_id, '_ai_cg_operation_timestamp');
+        }
+
+        return $operation;
+    }
+
+    /**
+     * 获取操作栈大小
+     */
+    private function get_operation_stack_size($post_id) {
+        $stack = get_post_meta($post_id, '_ai_cg_operation_stack', true);
+        return is_array($stack) ? count($stack) : 0;
+    }
+
+    /**
+     * 获取操作栈顶部的操作
+     */
+    private function get_top_operation($post_id) {
+        $stack = get_post_meta($post_id, '_ai_cg_operation_stack', true);
+
+        if (!is_array($stack) || empty($stack)) {
+            return null;
+        }
+
+        return end($stack);
+    }
+
+    /**
+     * 清除指定类型的操作
+     */
+    private function clear_operation_stack_by_type($post_id, $type) {
+        $stack_key = '_ai_cg_operation_stack';
+        $stack = get_post_meta($post_id, $stack_key, true);
+
+        if (!is_array($stack)) {
+            return;
+        }
+
+        // 过滤掉指定类型的操作
+        $stack = array_filter($stack, function($op) use ($type) {
+            return $op['type'] !== $type;
+        });
+
+        if (empty($stack)) {
+            delete_post_meta($post_id, $stack_key);
+        } else {
+            update_post_meta($post_id, $stack_key, $stack);
+        }
     }
 
     /**

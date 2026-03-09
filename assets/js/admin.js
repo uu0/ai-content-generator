@@ -52,12 +52,6 @@
             generateFeaturedImage($(this));
         });
 
-        // 生成图片描述
-        $(document).on('click', '.ai-cg-generate-image-description', function(e) {
-            e.preventDefault();
-            generateImageDescription($(this));
-        });
-
         // AI润色
         $(document).on('click', '.ai-cg-polish:not(.ai-cg-bulk-polish)', function(e) {
             e.preventDefault();
@@ -82,8 +76,26 @@
             unexcludePost($(this));
         });
 
-        // 撤回操作
-        $(document).on('click', '.ai-cg-undo', function(e) {
+        // 撤回润色操作
+        $(document).on('click', '.ai-cg-undo-polish', function(e) {
+            e.preventDefault();
+            undoPolish($(this));
+        });
+
+        // 撤回排版操作
+        $(document).on('click', '.ai-cg-undo-reformat', function(e) {
+            e.preventDefault();
+            undoReformat($(this));
+        });
+
+        // 确认操作
+        $(document).on('click', '.ai-cg-confirm', function(e) {
+            e.preventDefault();
+            confirmOperation($(this));
+        });
+
+        // 撤回操作（旧版兼容）
+        $(document).on('click', '.ai-cg-undo:not(.ai-cg-undo-polish):not(.ai-cg-undo-reformat)', function(e) {
             e.preventDefault();
             undoOperation($(this));
         });
@@ -161,67 +173,6 @@
         });
     }
 
-    // 生成图片描述
-    function generateImageDescription(button) {
-        var postId = button.data('post-id');
-
-        if (!postId) {
-            alert('无效的文章ID');
-            return;
-        }
-
-        if (!confirm('确定要为这篇文章的图片生成描述并重命名吗？\n\n注意：此操作会修改图片文件名，请确保已备份。')) {
-            return;
-        }
-
-        showLoading(true); // 图片描述需要较长时间
-
-        $.ajax({
-            url: ai_cg_data.ajax_url,
-            type: 'POST',
-            data: {
-                action: 'ai_cg_generate_image_description',
-                post_id: postId,
-                nonce: ai_cg_data.nonce
-            },
-            success: function(response) {
-                hideLoading();
-                if (response.success) {
-                    // 如果有部分失败，显示详情
-                    if (response.data.renamed < response.data.total && response.data.results) {
-                        var errorCount = response.data.total - response.data.renamed;
-                        var errorMsg = '图片描述生成完成！\n\n处理了 ' + response.data.total + ' 张图片，成功重命名 ' + response.data.renamed + ' 张，失败 ' + errorCount + ' 张。\n\n失败原因：\n';
-
-                        // 显示前3个失败项
-                        var errorItems = response.data.results.filter(function(item) {
-                            return item.status === 'error';
-                        }).slice(0, 3);
-
-                        errorItems.forEach(function(item) {
-                            errorMsg += '- 附件ID ' + item.attachment_id + ': ' + item.message + '\n';
-                        });
-
-                        if (errorCount > 3) {
-                            errorMsg += '... 还有 ' + (errorCount - 3) + ' 个失败项';
-                        }
-
-                        alert(errorMsg);
-                    } else {
-                        alert('图片描述生成成功！\n\n处理了 ' + response.data.total + ' 张图片，重命名 ' + response.data.renamed + ' 张。');
-                    }
-                    // 刷新页面
-                    location.reload();
-                } else {
-                    alert('生成失败：' + response.data);
-                }
-            },
-            error: function() {
-                hideLoading();
-                alert('网络错误，请稍后重试');
-            }
-        });
-    }
-
     // AI润色
     function polishContent(button) {
         var postId = button.data('post-id');
@@ -256,7 +207,6 @@
         var bulkImage = $('.ai-cg-bulk-image');
         var bulkPolish = $('.ai-cg-bulk-polish');
         var bulkReformat = $('.ai-cg-bulk-reformat');
-        var bulkDescription = $('.ai-cg-bulk-description');
         var bulkExclude = $('.ai-cg-bulk-exclude');
         var bulkUnexclude = $('.ai-cg-bulk-unexclude');
 
@@ -270,7 +220,6 @@
             bulkImage.attr('data-post-ids', selectedIds.join(','));
             bulkPolish.attr('data-post-ids', selectedIds.join(','));
             bulkReformat.attr('data-post-ids', selectedIds.join(','));
-            bulkDescription.attr('data-post-ids', selectedIds.join(','));
             bulkExclude.attr('data-post-ids', selectedIds.join(','));
             bulkUnexclude.attr('data-post-ids', selectedIds.join(','));
         }
@@ -333,22 +282,6 @@
             // 显示排版类型选择模态框
             $('#ai-cg-reformat-modal').data('post-ids', postIds).fadeIn();
             $('#ai-cg-reformat-type').val('standard');
-        });
-
-        // 批量图片描述
-        var bulkDescription = $('.ai-cg-bulk-description');
-        bulkDescription.on('click', function() {
-            var postIds = $(this).attr('data-post-ids');
-            if (!postIds) {
-                alert('请先选择要处理的文章');
-                return;
-            }
-
-            if (!confirm('确定要为选中的 ' + postIds.split(',').length + ' 篇文章的图片生成描述并重命名吗？\n\n注意：此操作会修改图片文件名，请确保已备份。')) {
-                return;
-            }
-
-            generateBulkDescription(postIds);
         });
 
         // 批量排除
@@ -747,6 +680,8 @@
                         // 保存当前选中的模型
                         var currentSummaryModel = $('#ai-cg-summary-model').val();
                         var currentImageModel = $('#ai-cg-image-model').val();
+                        var currentPolishModel = $('#ai-cg-polish-model').val();
+                        var currentReformatModel = $('#ai-cg-reformat-model').val();
 
                         // 更新摘要生成模型选项
                         var summarySelect = $('#ai-cg-summary-model');
@@ -780,6 +715,36 @@
                             imageSelect.val(currentImageModel);
                         }
 
+                        // 更新润色模型选项
+                        var polishSelect = $('#ai-cg-polish-model');
+                        polishSelect.empty();
+                        var selectedExistsPolish = false;
+                        $.each(response.data.chat_models, function(modelKey, modelName) {
+                            polishSelect.append('<option value="' + modelKey + '">' + modelName + '</option>');
+                            if (modelKey === currentPolishModel) {
+                                selectedExistsPolish = true;
+                            }
+                        });
+
+                        if (selectedExistsPolish) {
+                            polishSelect.val(currentPolishModel);
+                        }
+
+                        // 更新排版模型选项
+                        var reformatSelect = $('#ai-cg-reformat-model');
+                        reformatSelect.empty();
+                        var selectedExistsReformat = false;
+                        $.each(response.data.chat_models, function(modelKey, modelName) {
+                            reformatSelect.append('<option value="' + modelKey + '">' + modelName + '</option>');
+                            if (modelKey === currentReformatModel) {
+                                selectedExistsReformat = true;
+                            }
+                        });
+
+                        if (selectedExistsReformat) {
+                            reformatSelect.val(currentReformatModel);
+                        }
+
                         // 3秒后清除状态信息
                         setTimeout(function() {
                             statusSpan.text('最后更新：' + new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })).css('color', '#999');
@@ -800,50 +765,6 @@
                 }
             });
         });
-    }
-
-    // 批量图片描述
-    function generateBulkDescription(postIds) {
-        var ids = postIds.split(',');
-        var currentIndex = 0;
-
-        showLoading(true); // 批量描述需要较长时间
-
-        function processNextDescription() {
-            if (currentIndex >= ids.length) {
-                hideLoading();
-                alert('批量图片描述完成！');
-                location.reload();
-                return;
-            }
-
-            var postId = ids[currentIndex];
-            $.ajax({
-                url: ai_cg_data.ajax_url,
-                type: 'POST',
-                data: {
-                    action: 'ai_cg_generate_image_description',
-                    post_id: postId,
-                    nonce: ai_cg_data.nonce
-                },
-                success: function(response) {
-                    if (response.success) {
-                        console.log('文章 ' + postId + ' 图片描述成功，处理了 ' + response.data.total + ' 张图片，重命名 ' + response.data.renamed + ' 张');
-                    } else {
-                        console.error('文章 ' + postId + ' 图片描述失败：', response.data);
-                    }
-                },
-                error: function() {
-                    console.error('文章 ' + postId + ' 请求失败');
-                },
-                complete: function() {
-                    currentIndex++;
-                    setTimeout(processNextDescription, 2000); // 避免请求过快，图片处理需要时间
-                }
-            });
-        }
-
-        processNextDescription();
     }
 
     // 模态框初始化
@@ -1196,6 +1117,137 @@
                     location.reload();
                 } else {
                     alert('撤回失败：' + response.data);
+                }
+            },
+            error: function() {
+                hideLoading();
+                alert('网络错误，请稍后重试');
+            }
+        });
+    }
+
+    // 撤回润色操作
+    function undoPolish(button) {
+        var postId = button.data('post-id');
+
+        if (!postId) {
+            alert('无效的文章ID');
+            return;
+        }
+
+        if (!confirm('确定要撤回润色操作吗？\n\n此操作将恢复到润色前的内容。')) {
+            return;
+        }
+
+        showLoading();
+
+        $.ajax({
+            url: ai_cg_data.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'ai_cg_undo_polish',
+                post_id: postId,
+                nonce: ai_cg_data.nonce
+            },
+            success: function(response) {
+                hideLoading();
+                if (response.success) {
+                    alert('已撤回润色操作！');
+                    location.reload();
+                } else {
+                    alert('撤回失败：' + response.data);
+                }
+            },
+            error: function() {
+                hideLoading();
+                alert('网络错误，请稍后重试');
+            }
+        });
+    }
+
+    // 撤回排版操作
+    function undoReformat(button) {
+        var postId = button.data('post-id');
+
+        if (!postId) {
+            alert('无效的文章ID');
+            return;
+        }
+
+        if (!confirm('确定要撤回排版操作吗？\n\n此操作将恢复到排版前的内容。')) {
+            return;
+        }
+
+        showLoading();
+
+        $.ajax({
+            url: ai_cg_data.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'ai_cg_undo_reformat',
+                post_id: postId,
+                nonce: ai_cg_data.nonce
+            },
+            success: function(response) {
+                hideLoading();
+                if (response.success) {
+                    alert('已撤回排版操作！');
+                    location.reload();
+                } else {
+                    alert('撤回失败：' + response.data);
+                }
+            },
+            error: function() {
+                hideLoading();
+                alert('网络错误，请稍后重试');
+            }
+        });
+    }
+
+    // 确认操作
+    function confirmOperation(button) {
+        var postId = button.data('post-id');
+
+        if (!postId) {
+            alert('无效的文章ID');
+            return;
+        }
+
+        if (!confirm('确定要确认当前修改吗？\n\n确认后撤回按钮将消失，无法再撤回本次操作。')) {
+            return;
+        }
+
+        showLoading();
+
+        // 检测是否还有未确认的润色或排版操作
+        var hasPolish = $('.ai-cg-undo-polish[data-post-id="' + postId + '"]').length > 0;
+        var hasReformat = $('.ai-cg-undo-reformat[data-post-id="' + postId + '"]').length > 0;
+        var operationType = '';
+
+        if (hasPolish && hasReformat) {
+            operationType = 'both';
+        } else if (hasPolish) {
+            operationType = 'polish';
+        } else if (hasReformat) {
+            operationType = 'reformat';
+        }
+
+        $.ajax({
+            url: ai_cg_data.ajax_url,
+            type: 'POST',
+            data: {
+                action: 'ai_cg_confirm_operation',
+                post_id: postId,
+                operation_type: operationType,
+                nonce: ai_cg_data.nonce
+            },
+            success: function(response) {
+                hideLoading();
+                if (response.success) {
+                    alert('操作已确认！');
+                    location.reload();
+                } else {
+                    alert('确认失败：' + response.data);
                 }
             },
             error: function() {

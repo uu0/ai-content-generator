@@ -19,9 +19,6 @@
                 <button type="button" class="button ai-cg-bulk-reformat" data-post-ids="">
                     批量排版
                 </button>
-                <button type="button" class="button ai-cg-bulk-description" data-post-ids="">
-                    批量描述
-                </button>
                 <button type="button" class="button ai-cg-bulk-exclude" data-post-ids="">
                     批量排除
                 </button>
@@ -134,9 +131,6 @@
                                 <button type="button" class="button button-small ai-cg-generate-image" data-post-id="<?php echo get_the_ID(); ?>">
                                     生图
                                 </button>
-                                <button type="button" class="button button-small ai-cg-generate-image-description" data-post-id="<?php echo get_the_ID(); ?>" title="为图片生成描述并重命名">
-                                    描述
-                                </button>
                                 <button type="button" class="button button-small ai-cg-polish" data-post-id="<?php echo get_the_ID(); ?>" title="AI润色文章">
                                     润色
                                 </button>
@@ -144,15 +138,42 @@
                                     排版
                                 </button>
                                 <?php
-                                $original_content = get_post_meta(get_the_ID(), '_ai_cg_original_content', true);
-                                $operation_type = get_post_meta(get_the_ID(), '_ai_cg_operation_type', true);
-                                if (!empty($original_content) && !empty($operation_type)) :
-                                    $op_label = $operation_type === 'polish' ? '润色' : '排版';
+                                // 获取操作栈
+                                $operation_stack = get_post_meta(get_the_ID(), '_ai_cg_operation_stack', true);
+                                $has_polish_undo = false;
+                                $has_reformat_undo = false;
+
+                                if (is_array($operation_stack) && !empty($operation_stack)) {
+                                    foreach ($operation_stack as $op) {
+                                        if ($op['type'] === 'polish') {
+                                            $has_polish_undo = true;
+                                        }
+                                        if ($op['type'] === 'reformat') {
+                                            $has_reformat_undo = true;
+                                        }
+                                    }
+                                }
+
+                                // 显示单独的撤回按钮
+                                if ($has_polish_undo) :
                                 ?>
-                                    <button type="button" class="button button-small ai-cg-undo" data-post-id="<?php echo get_the_ID(); ?>" data-operation-type="<?php echo esc_attr($operation_type); ?>" title="撤回<?php echo esc_html($op_label); ?>操作">
-                                        撤回
+                                    <button type="button" class="button button-small ai-cg-undo-polish" data-post-id="<?php echo get_the_ID(); ?>" title="撤回润色操作">
+                                        撤回润色
                                     </button>
                                 <?php endif; ?>
+
+                                <?php if ($has_reformat_undo) : ?>
+                                    <button type="button" class="button button-small ai-cg-undo-reformat" data-post-id="<?php echo get_the_ID(); ?>" title="撤回排版操作">
+                                        撤回排版
+                                    </button>
+                                <?php endif; ?>
+
+                                <?php if ($has_polish_undo || $has_reformat_undo) : ?>
+                                    <button type="button" class="button button-small button-secondary ai-cg-confirm" data-post-id="<?php echo get_the_ID(); ?>" title="确认修改，清除撤回按钮">
+                                        确认
+                                    </button>
+                                <?php endif; ?>
+
                                 <?php if ($is_excluded) : ?>
                                     <button type="button" class="button button-small ai-cg-unexclude" data-post-id="<?php echo get_the_ID(); ?>" title="从排除列表中移除">
                                         取消排除
