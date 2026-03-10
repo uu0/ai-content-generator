@@ -41,6 +41,135 @@ class AI_Content_Generator_API {
     }
 
     /**
+     * 获取 Base URL
+     */
+    private function get_base_url() {
+        $base_url = get_option('ai_cg_base_url', 'https://api.siliconflow.cn/v1');
+        return rtrim($base_url, '/');
+    }
+
+    /**
+     * 获取 API 类型
+     */
+    private function get_api_type() {
+        return get_option('ai_cg_api_type', 'openai');
+    }
+
+    /**
+     * 测试 API 连接
+     */
+    public function test_api_connection($base_url = null, $api_key = null, $api_type = null, $model = null) {
+        $base_url = $base_url ?: $this->get_base_url();
+        $api_key = $api_key ?: $this->get_api_key();
+        $api_type = $api_type ?: $this->get_api_type();
+        $model = $model ?: get_option('ai_cg_summary_model', 'deepseek-chat');
+
+        if (empty($api_key) || empty($model)) {
+            return new WP_Error('missing_config', 'API Key 或模型名称未配置');
+        }
+
+        // 根据 API 类型构建请求
+        if ($api_type === 'claude') {
+            return $this->test_claude_api($base_url, $api_key, $model);
+        } else {
+            return $this->test_openai_api($base_url, $api_key, $model);
+        }
+    }
+
+    /**
+     * 测试 OpenAI 格式 API
+     */
+    private function test_openai_api($base_url, $api_key, $model) {
+        $endpoint = $base_url . '/chat/completions';
+
+        $body = array(
+            'model' => $model,
+            'messages' => array(
+                array(
+                    'role' => 'user',
+                    'content' => 'Hello'
+                )
+            ),
+            'max_tokens' => 10
+        );
+
+        $response = wp_remote_post($endpoint, array(
+            'headers' => array(
+                'Authorization' => 'Bearer ' . $api_key,
+                'Content-Type' => 'application/json'
+            ),
+            'body' => json_encode($body),
+            'timeout' => 30
+        ));
+
+        if (is_wp_error($response)) {
+            return $response;
+        }
+
+        $status_code = wp_remote_retrieve_response_code($response);
+        $body = wp_remote_retrieve_body($response);
+        $data = json_decode($body, true);
+
+        if ($status_code !== 200) {
+            $error_message = isset($data['error']['message']) ? $data['error']['message'] : '未知错误';
+            return new WP_Error('api_error', $error_message . ' (HTTP ' . $status_code . ')');
+        }
+
+        if (!isset($data['choices'][0]['message']['content'])) {
+            return new WP_Error('invalid_response', 'API 返回格式不正确');
+        }
+
+        return array('success' => true, 'message' => 'API 连接成功');
+    }
+
+    /**
+     * 测试 Claude 格式 API
+     */
+    private function test_claude_api($base_url, $api_key, $model) {
+        $endpoint = $base_url . '/messages';
+
+        $body = array(
+            'model' => $model,
+            'messages' => array(
+                array(
+                    'role' => 'user',
+                    'content' => 'Hello'
+                )
+            ),
+            'max_tokens' => 10
+        );
+
+        $response = wp_remote_post($endpoint, array(
+            'headers' => array(
+                'x-api-key' => $api_key,
+                'anthropic-version' => '2023-06-01',
+                'Content-Type' => 'application/json'
+            ),
+            'body' => json_encode($body),
+            'timeout' => 30
+        ));
+
+        if (is_wp_error($response)) {
+            return $response;
+        }
+
+        $status_code = wp_remote_retrieve_response_code($response);
+        $body = wp_remote_retrieve_body($response);
+        $data = json_decode($body, true);
+
+        if ($status_code !== 200) {
+            $error_message = isset($data['error']['message']) ? $data['error']['message'] : '未知错误';
+            return new WP_Error('api_error', $error_message . ' (HTTP ' . $status_code . ')');
+        }
+
+        if (!isset($data['content'][0]['text'])) {
+            return new WP_Error('invalid_response', 'API 返回格式不正确');
+        }
+
+        return array('success' => true, 'message' => 'API 连接成功');
+    }
+
+    /**
      * 生成文章摘要
      */
     public function generate_summary($post_content, $post_title = '') {
@@ -144,7 +273,21 @@ class AI_Content_Generator_API {
      */
     private function call_chat_api($model, $prompt, $max_tokens = 500, $temperature = 0.7) {
         $api_key = $this->get_api_key();
-        $endpoint = 'https://api.siliconflow.cn/v1/chat/completions';
+        $base_url = $this->get_base_url();
+        $api_type = $this->get_api_type();
+
+        if ($api_type === 'claude') {
+            return $this->call_claude_chat_api($base_url, $api_key, $model, $prompt, $max_tokens, $temperature);
+        } else {
+            return $this->call_openai_chat_api($base_url, $api_key, $model, $prompt, $max_tokens, $temperature);
+        }
+    }
+
+    /**
+     * 调用 OpenAI 格式聊天 API
+     */
+    private function call_openai_chat_api($base_url, $api_key, $model, $prompt, $max_tokens, $temperature) {
+        $endpoint = $base_url . '/chat/completions';
 
         $body = array(
             'model' => $model,
@@ -171,11 +314,68 @@ class AI_Content_Generator_API {
             return $response;
         }
 
-        $body = wp_remote_retrieve_body($response);
-        $data = json_decode($body, true);
+        $response_body = wp_remote_retrieve_body($response);
+        $data = json_decode($response_body, true);
 
         if (isset($data['error'])) {
             return new WP_Error('api_error', $data['error']['message']);
+        }
+
+        // 记录Token统计
+        $stats = AI_Content_Generator_Stats::get_instance();
+        $stats->record_token_usage(0, 'generate_summary', $model, $data);
+
+        return $data;
+    }
+
+    /**
+     * 调用 Claude 格式聊天 API
+     */
+    private function call_claude_chat_api($base_url, $api_key, $model, $prompt, $max_tokens, $temperature) {
+        $endpoint = $base_url . '/messages';
+
+        $body = array(
+            'model' => $model,
+            'messages' => array(
+                array(
+                    'role' => 'user',
+                    'content' => $prompt
+                )
+            ),
+            'max_tokens' => $max_tokens,
+            'temperature' => $temperature
+        );
+
+        $response = wp_remote_post($endpoint, array(
+            'headers' => array(
+                'x-api-key' => $api_key,
+                'anthropic-version' => '2023-06-01',
+                'Content-Type' => 'application/json'
+            ),
+            'body' => json_encode($body),
+            'timeout' => 120
+        ));
+
+        if (is_wp_error($response)) {
+            return $response;
+        }
+
+        $response_body = wp_remote_retrieve_body($response);
+        $data = json_decode($response_body, true);
+
+        if (isset($data['error'])) {
+            return new WP_Error('api_error', $data['error']['message']);
+        }
+
+        // 转换 Claude 响应格式为 OpenAI 格式（兼容现有代码）
+        if (isset($data['content'][0]['text'])) {
+            $data['choices'] = array(
+                array(
+                    'message' => array(
+                        'content' => $data['content'][0]['text']
+                    )
+                )
+            );
         }
 
         // 记录Token统计
@@ -243,7 +443,8 @@ class AI_Content_Generator_API {
      */
     private function call_image_api($model, $prompt) {
         $api_key = $this->get_api_key();
-        $endpoint = 'https://api.siliconflow.cn/v1/images/generations';
+        $base_url = $this->get_base_url();
+        $endpoint = $base_url . '/images/generations';
 
         $body = array(
             'model' => $model,

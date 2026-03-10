@@ -10,11 +10,35 @@
 
                 <table class="form-table">
                     <tr>
+                        <th scope="row">API 类型</th>
+                        <td>
+                            <select name="ai_cg_api_type" class="regular-text">
+                                <option value="openai" <?php selected(get_option('ai_cg_api_type', 'openai'), 'openai'); ?>>OpenAI 格式</option>
+                                <option value="claude" <?php selected(get_option('ai_cg_api_type', 'openai'), 'claude'); ?>>Claude 格式</option>
+                            </select>
+                            <p class="description">选择 API 格式类型。大多数兼容 OpenAI 的 API（如硅基流动、DeepSeek 等）选择 OpenAI 格式。</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row">Base URL</th>
+                        <td>
+                            <input type="text" name="ai_cg_base_url" value="<?php echo esc_attr(get_option('ai_cg_base_url', 'https://api.siliconflow.cn/v1')); ?>" class="regular-text" placeholder="https://api.siliconflow.cn/v1">
+                            <p class="description">
+                                API 的 Base URL（不包含具体的 endpoint）。<br>
+                                <strong>示例：</strong><br>
+                                • 硅基流动：<code>https://api.siliconflow.cn/v1</code><br>
+                                • OpenAI：<code>https://api.openai.com/v1</code><br>
+                                • DeepSeek：<code>https://api.deepseek.com/v1</code><br>
+                                • Claude：<code>https://api.anthropic.com/v1</code>
+                            </p>
+                        </td>
+                    </tr>
+                    <tr>
                         <th scope="row">API密钥</th>
                         <td>
                             <input type="password" name="ai_cg_api_key" value="<?php echo esc_attr(get_option('ai_cg_api_key')); ?>" class="regular-text">
                             <p class="description">
-                                请输入您的硅基流动API密钥。<a href="https://cloud.siliconflow.cn/i/H7S7dWHo" target="_blank">访问我的推荐链接获取初始额度</a> 或者 <a href="https://cloud.siliconflow.cn/" target="_blank">访问官网</a> 获取API密钥。
+                                请输入您的 API 密钥。<a href="https://cloud.siliconflow.cn/i/H7S7dWHo" target="_blank">硅基流动</a> | <a href="https://platform.openai.com/api-keys" target="_blank">OpenAI</a> | <a href="https://platform.deepseek.com/api_keys" target="_blank">DeepSeek</a>
                             </p>
                         </td>
                     </tr>
@@ -59,96 +83,63 @@
             </div>
 
             <div class="ai-cg-setting-section">
-                <h2>
-                    模型配置
-                    <button type="button" id="ai-cg-refresh-models" class="button button-secondary" style="margin-left: 10px;">
-                        <span class="dashicons dashicons-update"></span>
-                        刷新模型列表
-                    </button>
-                    <span id="ai-cg-models-status" style="margin-left: 10px; font-size: 13px;"></span>
-                </h2>
+                <h2>模型配置</h2>
 
                 <div class="notice notice-warning inline" style="margin: 15px 0; padding: 12px; background-color: #fff3cd; border-left: 4px solid #ffc107;">
                     <p><strong>⚠️ 重要提示：</strong></p>
                     <ul style="margin: 8px 0 8px 20px;">
-                        <li>请前往 <a href="https://cloud.siliconflow.cn/i/H7S7dWHo" target="_blank" style="color: #d63638; text-decoration: underline;">硅基流动平台</a> 核对模型的具体能力和用途后再选择使用</li>
-                        <li>不同模型支持的功能不同（如：文本生成、图片生成、图片编辑等），请仔细区分</li>
+                        <li>请手动填入模型名称，确保模型名称与 API 提供商的文档一致</li>
+                        <li>不同模型支持的功能不同（如：文本生成、图片生成等），请仔细区分</li>
+                        <li>保存设置时会自动测试 API 连接和模型可用性</li>
                         <li>选择错误的模型可能导致功能异常或API调用失败</li>
                     </ul>
-                    <p style="margin-top: 8px; font-size: 13px;">
-                        <strong>如遇到设置错误导致无法挽回的问题，请使用 ai-content-generator-database-fix 插件进行修复。</strong>
-                    </p>
                 </div>
 
                 <table class="form-table">
                     <tr>
                         <th scope="row">摘要生成模型</th>
                         <td>
-                            <select name="ai_cg_summary_model" id="ai-cg-summary-model" class="regular-text">
-                                <?php
-                                $api = AI_Content_Generator_API::get_instance();
-                                $models = $api->get_available_models();
-                                $selected_model = get_option('ai_cg_summary_model', 'deepseek-ai/DeepSeek-V3');
-
-                                foreach ($models['chat'] as $model_key => $model_name) :
-                                    ?>
-                                    <option value="<?php echo esc_attr($model_key); ?>" <?php selected($selected_model, $model_key); ?>>
-                                        <?php echo esc_html($model_name); ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                            <p class="description">选择用于生成文章摘要的AI模型（必须是文本/对话模型）。共 <strong id="ai-cg-chat-models-count"><?php echo count($models['chat']); ?></strong> 个可用模型。</p>
+                            <input type="text" name="ai_cg_summary_model" value="<?php echo esc_attr(get_option('ai_cg_summary_model', 'deepseek-chat')); ?>" class="regular-text" placeholder="deepseek-chat">
+                            <p class="description">
+                                用于生成文章摘要的文本模型。<br>
+                                <strong>示例：</strong><br>
+                                • 硅基流动：<code>deepseek-chat</code>、<code>Qwen/Qwen2.5-72B-Instruct</code><br>
+                                • OpenAI：<code>gpt-4o</code>、<code>gpt-3.5-turbo</code><br>
+                                • DeepSeek：<code>deepseek-chat</code><br>
+                                • Claude：<code>claude-3-5-sonnet-20241022</code>
+                            </p>
                         </td>
                     </tr>
                     <tr>
                         <th scope="row">图片生成模型</th>
                         <td>
-                            <select name="ai_cg_image_model" id="ai-cg-image-model" class="regular-text">
-                                <?php
-                                $selected_model = get_option('ai_cg_image_model', 'Qwen/Qwen2-VL-7B-Instruct');
-
-                                foreach ($models['image'] as $model_key => $model_name) :
-                                    ?>
-                                    <option value="<?php echo esc_attr($model_key); ?>" <?php selected($selected_model, $model_key); ?>>
-                                        <?php echo esc_html($model_name); ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                            <p class="description">选择用于生成特色图片的AI模型（必须是图片生成模型）。共 <strong id="ai-cg-image-models-count"><?php echo count($models['image']); ?></strong> 个可用模型。</p>
+                            <input type="text" name="ai_cg_image_model" value="<?php echo esc_attr(get_option('ai_cg_image_model', 'black-forest-labs/FLUX.1-schnell')); ?>" class="regular-text" placeholder="black-forest-labs/FLUX.1-schnell">
+                            <p class="description">
+                                用于生成特色图片的图片模型。<br>
+                                <strong>示例：</strong><br>
+                                • 硅基流动：<code>black-forest-labs/FLUX.1-schnell</code>、<code>stabilityai/stable-diffusion-3-5-large</code><br>
+                                • OpenAI：<code>dall-e-3</code>、<code>dall-e-2</code>
+                            </p>
                         </td>
                     </tr>
                     <tr>
                         <th scope="row">润色功能模型</th>
                         <td>
-                            <select name="ai_cg_polish_model" id="ai-cg-polish-model" class="regular-text">
-                                <?php
-                                $selected_model = get_option('ai_cg_polish_model', 'Qwen/Qwen2.5-122B-Instruct');
-
-                                foreach ($models['chat'] as $model_key => $model_name) :
-                                    ?>
-                                    <option value="<?php echo esc_attr($model_key); ?>" <?php selected($selected_model, $model_key); ?>>
-                                        <?php echo esc_html($model_name); ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                            <p class="description">选择用于文章润色的AI模型（必须是文本/对话模型）。支持标准润色、正式风格、轻松风格、创意风格四种模式。</p>
+                            <input type="text" name="ai_cg_polish_model" value="<?php echo esc_attr(get_option('ai_cg_polish_model', 'deepseek-chat')); ?>" class="regular-text" placeholder="deepseek-chat">
+                            <p class="description">
+                                用于文章润色的文本模型。支持标准润色、正式风格、轻松风格、创意风格四种模式。<br>
+                                建议使用与摘要生成相同的模型。
+                            </p>
                         </td>
                     </tr>
                     <tr>
                         <th scope="row">排版功能模型</th>
                         <td>
-                            <select name="ai_cg_reformat_model" id="ai-cg-reformat-model" class="regular-text">
-                                <?php
-                                $selected_model = get_option('ai_cg_reformat_model', 'Qwen/Qwen2.5-122B-Instruct');
-
-                                foreach ($models['chat'] as $model_key => $model_name) :
-                                    ?>
-                                    <option value="<?php echo esc_attr($model_key); ?>" <?php selected($selected_model, $model_key); ?>>
-                                        <?php echo esc_html($model_name); ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                            <p class="description">选择用于文章排版的AI模型（必须是文本/对话模型）。支持标准排版、博客格式、技术文档格式三种模式。</p>
+                            <input type="text" name="ai_cg_reformat_model" value="<?php echo esc_attr(get_option('ai_cg_reformat_model', 'deepseek-chat')); ?>" class="regular-text" placeholder="deepseek-chat">
+                            <p class="description">
+                                用于文章排版的文本模型。支持标准排版、博客格式、技术文档格式三种模式。<br>
+                                建议使用与摘要生成相同的模型。
+                            </p>
                         </td>
                     </tr>
                 </table>
@@ -372,11 +363,12 @@
     <div class="ai-cg-info-box">
         <h3>使用说明</h3>
         <ol>
-            <li>在"API配置"中输入您的硅基流动API密钥</li>
+            <li>在"API配置"中选择 API 类型（OpenAI 或 Claude 格式）</li>
+            <li>填入 Base URL 和 API 密钥</li>
+            <li>在"模型配置"中手动填入模型名称（请参考 API 提供商的文档）</li>
+            <li>点击"保存设置"，系统会自动测试 API 连接</li>
             <li>在"功能开关"中启用您需要的功能（摘要生成、特色图片生成）</li>
-            <li>在"模型配置"中选择合适的AI模型</li>
             <li>在"文章管理"页面中可以批量或单独为文章生成摘要和图片</li>
-            <li>在"Token统计"页面中查看API调用统计信息</li>
         </ol>
         <p><strong>注意:</strong> 启用自动检查后，系统每小时会自动处理5篇没有摘要的文章和5篇没有特色图片的文章。</p>
     </div>

@@ -86,6 +86,10 @@ class AI_Content_Generator_Admin {
      */
     public function register_settings() {
         register_setting('ai_cg_settings', 'ai_cg_api_key');
+        register_setting('ai_cg_settings', 'ai_cg_base_url', array(
+            'sanitize_callback' => array($this, 'validate_api_settings')
+        ));
+        register_setting('ai_cg_settings', 'ai_cg_api_type');
         register_setting('ai_cg_settings', 'ai_cg_summary_enabled');
         register_setting('ai_cg_settings', 'ai_cg_featured_image_enabled');
         register_setting('ai_cg_settings', 'ai_cg_summary_model');
@@ -128,6 +132,71 @@ class AI_Content_Generator_Admin {
             return implode(',', $filtered);
         }
         return '';
+    }
+
+    /**
+     * 验证 API 设置
+     */
+    public function validate_api_settings($base_url) {
+        // 清理 URL
+        $base_url = trim($base_url);
+
+        // 如果为空，返回空字符串
+        if (empty($base_url)) {
+            return '';
+        }
+
+        // 移除末尾的斜杠
+        $base_url = rtrim($base_url, '/');
+
+        // 验证 URL 格式
+        if (!filter_var($base_url, FILTER_VALIDATE_URL)) {
+            add_settings_error(
+                'ai_cg_base_url',
+                'invalid_url',
+                'Base URL 格式无效，请输入有效的 URL（例如：https://api.openai.com/v1）'
+            );
+            return get_option('ai_cg_base_url', '');
+        }
+
+        // 获取其他必要参数
+        $api_key = isset($_POST['ai_cg_api_key']) ? sanitize_text_field($_POST['ai_cg_api_key']) : get_option('ai_cg_api_key');
+        $api_type = isset($_POST['ai_cg_api_type']) ? sanitize_text_field($_POST['ai_cg_api_type']) : get_option('ai_cg_api_type', 'openai');
+        $summary_model = isset($_POST['ai_cg_summary_model']) ? sanitize_text_field($_POST['ai_cg_summary_model']) : get_option('ai_cg_summary_model');
+
+        // 如果 API Key 或模型为空，跳过验证
+        if (empty($api_key) || empty($summary_model)) {
+            add_settings_error(
+                'ai_cg_base_url',
+                'missing_config',
+                '请先填写 API Key 和模型名称',
+                'warning'
+            );
+            return $base_url;
+        }
+
+        // 测试 API 连接
+        $api = AI_Content_Generator_API::get_instance();
+        $test_result = $api->test_api_connection($base_url, $api_key, $api_type, $summary_model);
+
+        if (is_wp_error($test_result)) {
+            add_settings_error(
+                'ai_cg_base_url',
+                'api_test_failed',
+                'API 连接测试失败：' . $test_result->get_error_message(),
+                'error'
+            );
+            return get_option('ai_cg_base_url', '');
+        }
+
+        add_settings_error(
+            'ai_cg_base_url',
+            'api_test_success',
+            'API 连接测试成功！',
+            'success'
+        );
+
+        return $base_url;
     }
 
     /**

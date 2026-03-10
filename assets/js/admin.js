@@ -9,7 +9,6 @@
         initTestConnection();
         initClearStats();
         initLogActions();
-        initRefreshModels();
         initAutoFilter();
         initModals();
     });
@@ -648,124 +647,6 @@
         });
     }
 
-    // 刷新模型列表
-    function initRefreshModels() {
-        $('#ai-cg-refresh-models').on('click', function() {
-            var button = $(this);
-            var statusSpan = $('#ai-cg-models-status');
-
-            button.prop('disabled', true);
-            button.find('.dashicons').addClass('dashicons-update-alt');
-            button.find('.dashicons').css('animation', 'spin 1s linear infinite');
-            statusSpan.text('正在刷新模型列表...').css('color', '#666');
-
-            $.ajax({
-                url: ai_cg_data.ajax_url,
-                type: 'POST',
-                data: {
-                    action: 'ai_cg_refresh_models',
-                    nonce: ai_cg_data.nonce
-                },
-                success: function(response) {
-                    button.prop('disabled', false);
-                    button.find('.dashicons').css('animation', '');
-
-                    if (response.success) {
-                        statusSpan.text('刷新成功！共 ' + response.data.total + ' 个模型').css('color', 'green');
-
-                        // 更新模型计数
-                        $('#ai-cg-chat-models-count').text(Object.keys(response.data.chat_models).length);
-                        $('#ai-cg-image-models-count').text(Object.keys(response.data.image_models).length);
-
-                        // 保存当前选中的模型
-                        var currentSummaryModel = $('#ai-cg-summary-model').val();
-                        var currentImageModel = $('#ai-cg-image-model').val();
-                        var currentPolishModel = $('#ai-cg-polish-model').val();
-                        var currentReformatModel = $('#ai-cg-reformat-model').val();
-
-                        // 更新摘要生成模型选项
-                        var summarySelect = $('#ai-cg-summary-model');
-                        summarySelect.empty();
-                        var selectedExistsSummary = false;
-                        $.each(response.data.chat_models, function(modelKey, modelName) {
-                            summarySelect.append('<option value="' + modelKey + '">' + modelName + '</option>');
-                            if (modelKey === currentSummaryModel) {
-                                selectedExistsSummary = true;
-                            }
-                        });
-
-                        // 如果之前选择的模型仍然存在，保持选中状态
-                        if (selectedExistsSummary) {
-                            summarySelect.val(currentSummaryModel);
-                        }
-
-                        // 更新图片生成模型选项
-                        var imageSelect = $('#ai-cg-image-model');
-                        imageSelect.empty();
-                        var selectedExistsImage = false;
-                        $.each(response.data.image_models, function(modelKey, modelName) {
-                            imageSelect.append('<option value="' + modelKey + '">' + modelName + '</option>');
-                            if (modelKey === currentImageModel) {
-                                selectedExistsImage = true;
-                            }
-                        });
-
-                        // 如果之前选择的模型仍然存在，保持选中状态
-                        if (selectedExistsImage) {
-                            imageSelect.val(currentImageModel);
-                        }
-
-                        // 更新润色模型选项
-                        var polishSelect = $('#ai-cg-polish-model');
-                        polishSelect.empty();
-                        var selectedExistsPolish = false;
-                        $.each(response.data.chat_models, function(modelKey, modelName) {
-                            polishSelect.append('<option value="' + modelKey + '">' + modelName + '</option>');
-                            if (modelKey === currentPolishModel) {
-                                selectedExistsPolish = true;
-                            }
-                        });
-
-                        if (selectedExistsPolish) {
-                            polishSelect.val(currentPolishModel);
-                        }
-
-                        // 更新排版模型选项
-                        var reformatSelect = $('#ai-cg-reformat-model');
-                        reformatSelect.empty();
-                        var selectedExistsReformat = false;
-                        $.each(response.data.chat_models, function(modelKey, modelName) {
-                            reformatSelect.append('<option value="' + modelKey + '">' + modelName + '</option>');
-                            if (modelKey === currentReformatModel) {
-                                selectedExistsReformat = true;
-                            }
-                        });
-
-                        if (selectedExistsReformat) {
-                            reformatSelect.val(currentReformatModel);
-                        }
-
-                        // 3秒后清除状态信息
-                        setTimeout(function() {
-                            statusSpan.text('最后更新：' + new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })).css('color', '#999');
-
-                            // 5分钟后清除
-                            setTimeout(function() {
-                                statusSpan.text('');
-                            }, 300000);
-                        }, 3000);
-                    } else {
-                        statusSpan.text('刷新失败：' + response.data.message).css('color', 'red');
-                    }
-                },
-                error: function() {
-                    button.prop('disabled', false);
-                    button.find('.dashicons').css('animation', '');
-                    statusSpan.text('网络错误，请稍后重试').css('color', 'red');
-                }
-            });
-        });
-    }
 
     // 模态框初始化
     function initModals() {
